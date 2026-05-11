@@ -1,0 +1,63 @@
+# runtime settings for multi_2d
+
+tf: 100.0
+dt_storage: 1.0
+theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
+lambda: 0       # curvature factor (0 = planar, 1 = cylindrical, 2 = spherical)
+max_courant: 0.5
+
+meshes:
+
+  mesh_a:
+    dx: 0.005
+    dy: 0.005
+    u0: 0.0  # initial temperature, K
+    diffusivity: 0.0001
+    
+    lines: 
+    - [[0.035, 0.0], [0.111, 0.0]]
+    - [[0.111, 0.0], [0.111, 0.21]]
+    - [[0.111, 0.21], [0.035, 0.21]]
+    - [[0.035, 0.21], [0.035, 0.192]]
+    - [[0.035, 0.192], [0.045, 0.192]]
+    - [[0.045, 0.192], [0.045, 0.102]]
+    - [[0.045, 0.102], [0.035, 0.102]]
+    - [[0.035, 0.102], [0.035, 0.0]]
+
+    bc:
+    - {type: 'n', value: 0.0}
+    - {type: 'n', value: 0.0}
+    - {type: 'n', value: 0.0}
+    - {type: 'n', value: 0.0}
+    - {type: 'd', value: 100.0}
+    - {type: 'd', value: 100.0}
+    - {type: 'd', value: 100.0}
+    - {type: 'n', value: 0.0}
+
+
+  mesh_b:
+    dx: 0.01
+    dy: 0.01
+    u0: 10.0
+    diffusivity: 0.0001
+
+    lines:
+    - [[0.035, -0.05], [0.111, -0.05]]
+    - [[0.111, -0.05], [0.111, 0.0]]
+    - [[0.111, 0.0], [0.035, 0.0]]
+    - [[0.035, 0.0], [0.035, -0.05]]
+
+    bc:
+    - {type: 'n', value: 0.0}
+    - {type: 'd', value: 50.0}
+    - {type: 'n', value: 0.0}
+    - {type: 'n', value: 0.0}
+
+
+conditions:
+  
+  chamber:
+    u: 0.0
+    emissivity: 0.8
+    cp: 1000
+    mass: 1
