@@ -23,12 +23,19 @@ def plot_temp_1d(*, x:np.ndarray, t:np.ndarray, u:np.ndarray, **kwargs) -> None:
 
         regions = kwargs['regions'] if kwargs.get('regions') is not None else [[0, x.size - 1]]
         for i, r in enumerate(regions):
-            ax.plot(x[r[0]:r[1]+1], u[frame,r[0]:r[1]+1], linestyle='-', color='red', label=f"transient, region {i}")
+            ax.plot(x[r[0]:r[1]+1],
+                    u[frame,r[0]:r[1]+1],
+                    linestyle='-',
+                    color='red',
+                    label=f"transient, region {i}")
 
             if kwargs.get('show_final') is True:
-                ax.plot(x[r[0]:r[1]+1], u[-1,r[0]:r[1]+1], linestyle='--', color='b', label=f"final, region {i}")
+                ax.plot(x[r[0]:r[1]+1],
+                        u[-1,r[0]:r[1]+1],
+                        linestyle='--',
+                        color='b',
+                        label=f"final, region {i}")
 
-        #ax.plot(x, u[frame,:], linestyle='-', color='red', label='transient')
         ax.set_xlabel("x, m")
         ax.set_ylabel("u, K")
         ax.set_ylim(np.min(u), np.max(u)*1.05)
@@ -79,15 +86,6 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
 
     plt.style.use('dark_background')
     norm = plt.Normalize(u_min, u_max)
-
-    # if kwargs.get('show_final') is True:
-    #     fig = plt.figure()
-    #     ax_transient = fig.add_subplot(1, 2, 1, projection='3d')
-    #     ax_final = fig.add_subplot(1, 2, 2, projection='3d')
-    #     ax_final.plot_surface(xm, ym, u[:,:,-1].transpose, cmap='magma', norm=norm)
-    #     ax_final.set_title(f"Final Temperature @ t = {t[-1]:0.1f} s")
-    # else:
-    #     fig, ax_transient = plt.subplots(subplot_kw={'projection':'3d'})
 
     fig, ax_transient = plt.subplots(subplot_kw={'projection':'3d'})
     fig.set_tight_layout(True)

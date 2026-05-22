@@ -53,9 +53,11 @@ def simulate(config:str) -> None:
 
         t_now += dt
         store = t_now - t[-1] >= config['dt_storage']
-
         if store:
             t = np.hstack((t, t_now))
+
+        # calculate boundary condition values
+
 
         for m in config['meshes'].values():
 
@@ -67,20 +69,21 @@ def simulate(config:str) -> None:
             if store:
                 m['u'] = np.dstack((m['u'], u_new) )
 
-            # update mesh diffusivity
+            # update mesh diffusivity from material definition
 
-    # plot results
     plot_temp_2d(meshes=config['meshes'], t=t)
 
 
 
 def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray:
-    """Updates the state of a single mesh over a single timestep."""
+    """Updates the state of a single mesh over a single timestep via the ADI method."""
 
     i_arr = mesh['i_arr']
     j_arr = mesh['j_arr']
     dx = mesh['dx']
     dy = mesh['dy']
+
+    # Calculate diffusivity from material, temperature
     alpha = mesh['diffusivity']*np.ones((i_arr.size, j_arr.size), float)
 
     # calculate mesh coefficients
@@ -91,7 +94,6 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
     bx_c = curv*alpha*(1 - theta)*dt / (2*dx)
     bx_n = curv*alpha*theta*dt / (2*dx)
 
-    # solve via ADI
     u_in = mesh['u'][:, :, -1]
     u_mid = np.zeros((i_arr.size, j_arr.size), float)
     u_out = np.zeros((i_arr.size, j_arr.size), float)
@@ -104,7 +106,7 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
             e = np.where(i_arr == reg['bounds'][1])[0][0]
 
             if reg['type'] == 'edge':
-                # solve appropriate boundary condition based on prev ts state
+
                 bc = mesh['bc'][reg['bc']]
 
                 u_mid[s:e+1, j] = bc['value'] if bc['type'] == 'd' else\
@@ -112,7 +114,6 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
 
                 continue
 
-            # solve internal region using TDMA from s to e inclusive
             bc_s = mesh['bc'][reg['bc_s']]
             bc_e = mesh['bc'][reg['bc_e']]
 
@@ -135,7 +136,7 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
             u_mid[s:e+1,j] = tdma(u_in[s:e+1,j], a, b, c, d)
 
     # column slices (across y)
-    u_out = u_mid # XXX: doesn't this make the u_mid variable entirely redundant?
+    u_out = u_mid
     for i in range(i_arr.size):
         for reg in mesh['regions_y'][i]:
 
@@ -169,7 +170,6 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
 
             u_out[i,s:e+1] = tdma(u_mid[i,s:e+1], a, b, c, d)
 
-    # return new temperature
     return u_out
 
 
