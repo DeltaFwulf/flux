@@ -1,0 +1,56 @@
+# runtime settings for multi_2d
+
+tf: 2000.0
+dt_storage: 10.0
+theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
+# curvature factor (0 = planar, 1 = cylindrical, 2 = spherical)
+max_courant: 0.5
+
+meshes:
+
+  mesh_a:
+    dx: 0.02
+    dy: 0.01
+    u0: 288.0  # initial temperature, K
+    material: 'aluminium'
+    curvature: 0
+    depth: 0.1
+
+    lines:
+    - [[0.0, 0.1], [0.2, 0.1]]
+    - [[0.2, 0.1], [0.2, 0.2]]
+    - [[0.2, 0.2], [0.0, 0.2]]
+    - [[0.0, 0.2], [0.0, 0.1]]
+    
+    bc:
+    - {mode: 'conduction', link: ['mesh_b/2']}
+    - {mode: 'neumann', link: [], value: 0.0}
+    - {mode: 'dirichlet', link: [], value: 0.0}
+    - {mode: 'neumann', link: [], value: 0.0}
+
+  mesh_b:
+    dx: 0.01
+    dy: 0.01
+    u0: 1000.0
+    material: 'stainless_steel'
+    curvature: 0
+    depth: 0.1
+
+    lines:
+    - [[0.0, 0.0], [0.2, 0.0]]
+    - [[0.2, 0.0], [0.2, 0.1]]
+    - [[0.2, 0.1], [0.0, 0.1]]
+    - [[0.0, 0.1], [0.0, 0.0]]
+
+    bc:
+    - {mode: 'neumann', value: 0.0}
+    - {mode: 'neumann', value: 0.0}
+    - {mode: 'conduction', link: ['mesh_a/0']}
+    - {mode: 'neumann', value: 0.0}
+
+
+environment: # objects referenced in simulation
+  
+  ambient:
+    u: 288.0
+    type: 'fluid' # TODO: give a final designation for different types of conditions

@@ -1,0 +1,30 @@
+# Store material definitions here
+
+# HUGE DISCLAIMER FOR TIME BEING! These properties are SIMPLY FOR TESTING, do NOT trust!
+
+# https://www.engineeringtoolbox.com/aluminum-specific-heat-density-thermal-conductivity-temperature-d_2220.html
+aluminium:
+  label: 'Aluminium'
+  u: [150, 200, 250, 300, 400, 600]
+  k: [250, 237, 235, 237, 240, 231]
+  cp: [683, 797, 859, 902, 949, 1042]
+  rho: [2726, 2719, 2710, 2701, 2681, 2639]
+  emissivity: 0.8
+
+
+stainless_steel:
+  label: 'Stainless Steel'
+  u: [100, 200, 300, 400, 600, 800, 1000, 1200, 1500]
+  k: [9.2, 12.6, 14.9, 16.6, 19.8, 22.6, 25.4, 28.0, 31.7]
+  cp: [272, 402, 477, 515, 557, 582, 611, 640, 682]
+  rho: [7800, 7800, 7800, 7800, 7800, 7800, 7800, 7800, 7800,]
+  emissivity: 0.8
+
+
+IN_26_firebrick:
+  label: 'IN-26 Insulating Firebrick'
+  u: [533, 811, 1089, 1366]
+  k: [0.23, 0.27, 0.32, 0.37]
+  cp: [500, 500, 500, 500]
+  rho: [618, 618, 618, 618]
+  emissivity: 0.8
