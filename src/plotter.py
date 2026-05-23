@@ -63,13 +63,15 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
             ax.plot_surface(xm[k], ym[k], m['u'][:,:,frame].transpose(),
                             edgecolor='black',
                             cmap='magma',
-                            norm=norm)
+                            norm=norm,
+                            alpha=0.5,
+                            linewidth=0.8)
 
             ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
                        zdir='z', offset=u_min, cmap='coolwarm')
 
             ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
-                       zdir='x', offset=min(m['x']) - m['dx'], cmap='coolwarm')
+                       zdir='x', offset=min(m['x']) - side_offset, cmap='coolwarm')
 
         ax.set_zlim(u_min, u_max)
         ax.set_aspect('equalxy')
@@ -81,6 +83,7 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
 
     u_min = min(np.min(m['u']) for m in meshes.values())
     u_max = max(np.max(m['u']) for m in meshes.values())
+    side_offset = max(m['dx'] for m in meshes.values())
 
     xm = {}
     ym = {}
@@ -146,3 +149,10 @@ def plot2d_flat(meshes:dict, t:np.ndarray, **kwargs) -> None:
     interval = 50 if kwargs.get('interval') is not float else kwargs['interval']
     _ = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
     plt.show()
+
+
+
+def setup_visualiser(config:dict) -> None:
+    """Plots mesh boundaries and links for visual inspection."""
+
+    pass

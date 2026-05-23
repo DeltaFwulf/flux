@@ -8,16 +8,15 @@ import yaml
 from util import tdma, find_regions_2d, find_edges, bound_gradients
 from plotter import plot_temp_2d
 
-# FIXME: dirichlet boundary not updating properly, giving weird corner behaviour (top left)
-# FIXME: non-equal mesh spacing leads to discontinous conduction temperature (check element areas)
 # TODO: set all u values to NaN in void regions
+
 
 
 def simulate(config:str) -> None:
     """Sets up the mesh definitions and handles simulation and plotting."""
 
     # load runtime settings and mesh definitions
-    with open(config, 'r', encoding='utf-8') as cfg:
+    with open(join(getcwd(), config), 'r', encoding='utf-8') as cfg:
         config = yaml.load(cfg, Loader=yaml.SafeLoader)
 
     with open(join(getcwd(), 'src', 'data', 'materials.yaml'), encoding='utf-8') as f:
@@ -191,11 +190,11 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
             grad_s = mesh['gradients'][reg['bc_s']][i - mesh['edges'][reg['bc_s']]['indices'][0]]
             grad_e = mesh['gradients'][reg['bc_e']][i - mesh['edges'][reg['bc_e']]['indices'][0]]
 
-            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if bc_e['mode'] == 'd' else -1.0]
+            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if bc_e['mode'] == 'dirichlet' else -1.0]
 
-            b = np.r_[1.0 if bc_s['mode'] == 'd' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
+            b = np.r_[1.0 if bc_s['mode'] == 'dirichlet' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
 
-            c = np.r_[0.0 if bc_s['mode'] == 'd' else 1.0, -byy_n[i,s+2:e+1], 0.0]
+            c = np.r_[0.0 if bc_s['mode'] == 'dirichlet' else 1.0, -byy_n[i,s+2:e+1], 0.0]
 
             d = np.r_[bc_s['value'] if bc_s['mode'] == 'dirichlet' else dy*grad_s,\
 
@@ -203,7 +202,7 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
                 (1 - 2*bxx_c[i,s+1:e])*u_mid[i,s+1:e] +\
                 (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / (dx*i_arr[i]))*u_mid[i-1,s+1:e],
 
-                bc_e['value'] if bc_e['mode'] == 'd' else dy*grad_e]
+                bc_e['value'] if bc_e['mode'] == 'dirichlet' else dy*grad_e]
 
             u_out[i,s:e+1] = tdma(u_mid[i,s:e+1], a, b, c, d)
 
@@ -226,4 +225,4 @@ def update_properties(mesh:dict) -> None:
 
 
 
-simulate('/home/deltav/Documents/GitHub/flux/debug.yaml')
+simulate('debug.yaml')
