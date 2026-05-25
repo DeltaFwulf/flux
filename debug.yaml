@@ -24,9 +24,9 @@ meshes:
     
     bc:
     - {mode: 'conduction', link: ['mesh_b/2']}
-    - {mode: 'neumann', link: [], value: -1000.0}
-    - {mode: 'dirichlet', link: [], value: 0.0}
-    - {mode: 'neumann', link: [], value: 1000.0}
+    - {mode: 'neumann', link: [], value: 0.0}
+    - {mode: 'neumann', link: [], value: 0.0}
+    - {mode: 'neumann', link: [], value: 0.0}
 
   mesh_b:
     dx: 0.01

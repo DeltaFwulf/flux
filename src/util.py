@@ -3,6 +3,8 @@
 from math import copysign, pi
 import numpy as np
 
+from heat_transfer import conduction, convection, radiation
+
 
 
 def tdma(x, a, b, c, d) -> np.ndarray:
@@ -175,7 +177,7 @@ def find_edges(mesh:dict) -> list:
 
                 edges.append(edge)
 
-    # sort edges by place
+    # sort edges by line index
     edges = [edges[p] for p in np.argsort([edge['line_index'] for edge in edges])]
     mesh.update({'edges':edges})
 
@@ -295,26 +297,15 @@ def get_link_objects(cfg:dict, edge:dict, bc:dict) -> dict:
 
 
 
+# XXX: remove function? Put into gradient function?
 def calc_gradient(edge:dict, link:dict, mode:str) -> np.ndarray:
     """Calculates the edge temperature gradient given boundary condition."""
 
-    grad = np.zeros_like(edge['u'], float)
-    d = sum(edge['direction'])
-
     if mode == 'conduction':
-        na = link['k_bar'] / link['h_norm']
-        nb = edge['k_bar'] / edge['h_norm']
-
-        u_int = (na*link['u_in'] + nb*edge['u_in']) / (na + nb)
-        grad = d*(edge['u_in'] - u_int) / edge['h_norm']
-
+        q = conduction(edge, link)
     elif mode == 'radiation':
-        q = 5.67e-8*((2*edge['emissivity'] - 1)*link['u4_mean'] -\
-                link['emissivity']*edge['u']**4)
+        q = radiation(edge, link)
+    else:
+        q = convection(edge, link, mode)
 
-        grad = -2*q*d / edge['k_bar']
-
-    elif mode == 'convection':
-        pass
-
-    return grad
+    return -sum(edge['direction'])*q / edge['k_bar']

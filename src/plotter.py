@@ -61,7 +61,7 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
 
         for k, m in meshes.items():
             ax.plot_surface(xm[k], ym[k], m['u'][:,:,frame].transpose(),
-                            edgecolor='black',
+                            edgecolor=m['material']['colour'],
                             cmap='magma',
                             norm=norm,
                             alpha=0.5,
