@@ -1,100 +1,47 @@
 """Simulates multiple 2D meshes via linked boundary conditions."""
 
-from os import getcwd
-from os.path import join
 import numpy as np
-import yaml
 
-from util import tdma, find_regions_2d, find_edges, bound_gradients
-from plotter import plot_temp_2d
-
-# TODO: set all u values to NaN in void regions
+from util import tdma, bound_gradients, update_properties
 
 
 
-def simulate(config:str) -> None:
+def simulate_2d(inputs:dict) -> None:
     """Sets up the mesh definitions and handles simulation and plotting."""
-
-    # load runtime settings and mesh definitions
-    with open(join(getcwd(), config), 'r', encoding='utf-8') as cfg:
-        config = yaml.load(cfg, Loader=yaml.SafeLoader)
-
-    with open(join(getcwd(), 'src', 'data', 'materials.yaml'), encoding='utf-8') as f:
-        materials = yaml.load(stream=f, Loader=yaml.SafeLoader)
-
-    # process meshes
-    for m in config['meshes'].values():
-
-        # snap lines to the grid and convert to mesh indices
-        m['lines'] = [tuple((round(p[0] / m['dx']), round(p[1] / m['dy'])) for p in l)\
-                 for l in m['lines']]
-
-        i_min = min(p[0] for l in m['lines'] for p in l)
-        i_max = max(p[0] for l in m['lines'] for p in l)
-        j_min = min(p[1] for l in m['lines'] for p in l)
-        j_max = max(p[1] for l in m['lines'] for p in l)
-
-        m.update({'i_arr':np.arange(i_min, i_max + 1, 1)})
-        m.update({'j_arr':np.arange(j_min, j_max + 1, 1)})
-
-        m.update({'regions_x':[find_regions_2d(direction='x', ind_n=j, ind_p=m['i_arr'],\
-            lines=m['lines']) for j in m['j_arr']]})
-        m.update({'regions_y':[find_regions_2d(direction='y', ind_n=i, ind_p=m['j_arr'],\
-            lines=m['lines']) for i in m['i_arr']]})
-
-        # generate a mask array for this mesh
-
-        # replace material string with material definition
-        mat = materials.get(m['material'])
-        if mat is None:
-            print(f"Material {m['material']} is not found at /src/data/materials.yaml.")
-            raise ValueError
-
-        m.update({'material':mat})
-
-        find_edges(m)
-
-        m.update({'x':m['dx']*m['i_arr']})
-        m.update({'y':m['dy']*m['j_arr']})
-
-        # Meshes store 'u' for final results, u_latest for use in next timestep, u_last
-        # for reference by other meshes.
-        m.update({'u':np.zeros((m['i_arr'].size, m['j_arr'].size, 1), float) + m['u0']})
-        m.update({'u_latest':m['u'][:, :, -1]})
-        m.update({'u_last':m['u'][:, :, -1]})
-
-        update_properties(m)
 
     t = np.array([0.0], float)
     t_now = 0.0
 
-    while t_now < config['tf']:
+    while t_now < inputs['tf']:
         # calculate next timestep to satisfy courant constraint
 
-        dt = min(config['dt_storage'], min(config['max_courant']*min(m['dx'],\
-                 m['dy'])**2 / np.max(m['diffusivity']) for m in config['meshes'].values()))
+        dt = min(inputs['dt_storage'], min(inputs['max_courant']*min(m['dx'],\
+                 m['dy'])**2 / np.max(m['diffusivity']) for m in inputs['meshes'].values()))
 
         t_now += dt
-        store = t_now - t[-1] >= config['dt_storage']
+        store = t_now - t[-1] >= inputs['dt_storage']
         if store:
             t = np.hstack((t, t_now))
 
-        for key in config['meshes'].keys():
+        for key, m in inputs['meshes'].items():
 
-            m = config['meshes'][key]
             m['u_last'] = m['u_latest']
             update_properties(m)
-            bound_gradients(config=config, mesh_name=key)
+            bound_gradients(config=inputs, mesh_name=key)
 
             m['u_latest'] = update_mesh(mesh=m,
                                         dt=dt,
                                         curv=m['curvature'],
-                                        theta=config['theta'])
+                                        theta=inputs['theta'])
 
             if store:
                 m['u'] = np.dstack((m['u'], m['u_latest']))
 
-    plot_temp_2d(meshes=config['meshes'], t=t)
+    outputs = {}
+    outputs.update({'meshes':inputs['meshes']})
+    outputs.update({'t':t})
+
+    return outputs
 
 
 
@@ -207,22 +154,3 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
             u_out[i,s:e+1] = tdma(u_mid[i,s:e+1], a, b, c, d)
 
     return u_out
-
-
-
-def update_properties(mesh:dict) -> None:
-    """Updates the mesh's thermal properties (k, cp, rho) given temperature."""
-
-    u = mesh['u_last']
-    mat = mesh['material']
-
-    k = np.interp(x=u, xp=mat['u'], fp=mat['k'])
-    cp = np.interp(x=u, xp=mat['u'], fp=mat['cp'])
-    rho = np.interp(x=u, xp=mat['u'], fp=mat['rho'])
-    alpha = k / (rho*cp)
-
-    mesh.update({'k':k, 'cp':cp, 'rho':rho, 'diffusivity':alpha})
-
-
-
-simulate('debug.yaml')

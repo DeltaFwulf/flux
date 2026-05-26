@@ -28,5 +28,23 @@ def radiation(edge:dict, link:dict) -> np.ndarray:
 
 def convection(edge:dict, link:dict, mode:str) -> np.ndarray:
     """Calculates thermal flux due to convection, with different cases."""
-    q = np.zeros_like(edge['u'], float)
+
+    match mode:
+        case 'isothermal_vertical':
+            du = np.abs(link['u'] - edge['u'])
+            l = 0.0 # distance from leading edge along wall
+
+            # fluid properties
+            u_film = 0.5*(link['u'] + edge['u'])
+            beta = 1 / (u_film if link['phase'] != 'gas' else link['u'])
+            k = 0.0
+            alpha = 0.0
+            nu = 0.0
+
+            prandtl = nu / alpha
+            rayleigh = 9.81*beta*du*l**3 / (alpha*nu)
+
+            nusselt = 0.508*rayleigh**0.25 *(prandtl / (0.952 + prandtl))**0.25
+            q = nusselt*du*k / l
+
     return q

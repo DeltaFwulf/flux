@@ -52,7 +52,7 @@ def plot_temp_1d(*, x:np.ndarray, t:np.ndarray, u:np.ndarray, **kwargs) -> None:
 
 
 
-def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
+def animate_temp_2d(results:dict, **kwargs) -> None:
     """Animates the temperatures of multiple meshes, formed from rectangular elements."""
 
 
@@ -64,11 +64,11 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
                             edgecolor=m['material']['colour'],
                             cmap='magma',
                             norm=norm,
-                            alpha=0.5,
+                            alpha=1.0,
                             linewidth=0.8)
 
-            ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
-                       zdir='z', offset=u_min, cmap='coolwarm')
+            # ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
+            #            zdir='z', offset=u_min, cmap='coolwarm')
 
             ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
                        zdir='x', offset=min(m['x']) - side_offset, cmap='coolwarm')
@@ -80,6 +80,9 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
         ax.set_zlabel('u, K')
         ax.set_title(f"Mesh Temperature at t = {t[frame]:0.1f} s")
 
+
+    meshes = results['meshes']
+    t = results['t']
 
     u_min = min(np.min(m['u']) for m in meshes.values())
     u_max = max(np.max(m['u']) for m in meshes.values())
@@ -150,9 +153,3 @@ def plot2d_flat(meshes:dict, t:np.ndarray, **kwargs) -> None:
     _ = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
     plt.show()
 
-
-
-def setup_visualiser(config:dict) -> None:
-    """Plots mesh boundaries and links for visual inspection."""
-
-    pass

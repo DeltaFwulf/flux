@@ -20,7 +20,7 @@ stainless_steel:
   cp: [272, 402, 477, 515, 557, 582, 611, 640, 682]
   rho: [7800, 7800, 7800, 7800, 7800, 7800, 7800, 7800, 7800,]
   emissivity: 0.8
-  colour: 'steelblue'
+  colour: 'darkgrey'
 
 IN_26_firebrick:
   label: 'IN-26 Insulating Firebrick'
