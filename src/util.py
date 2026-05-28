@@ -5,7 +5,6 @@ import numpy as np
 
 from heat_transfer import conduction, convection, radiation
 
-# TODO: get all material-specific data for edges using same function as for link_objects, with new mode key idk
 
 
 def tdma(x, a, b, c, d) -> np.ndarray:
@@ -96,50 +95,6 @@ def calc_edge_states(cfg:dict) -> None:
             edge_states.append({'type':state_type, 'values':state_val})
 
         mesh.update({'edge_states':edge_states})
-
-
-
-# def bound_gradients(config:dict, meshkey:str) -> None:
-#     """Calculates the edge temperature gradients for all edges in the named mesh, 
-#        according to its boundary conditions."""
-
-#     mesh = config['meshes'].get(meshkey)
-#     edges = mesh['edges']
-
-#     for edge in edges: # process thermal data for use
-
-#         s, e, n = edge['indices']
-#         d = sum(edge['direction'])
-
-#         # get appropriate slice of temperature, conductivity, etc.
-#         if edge['direction'][0] == 0: # slice along x axis
-#             edge.update({'u':mesh['u_last'][s:e+1, n]})
-#             edge.update({'u_in':mesh['u_last'][s:e+1, n+d]})
-#             edge.update({'k_bar':0.5*(mesh['k'][s:e+1, n] + mesh['k'][s:e+1, n+d])})
-
-#         else:
-#             edge.update({'u':mesh['u_last'][n, s:e+1]})
-#             edge.update({'u_in':mesh['u_last'][n+d, s:e+1]})
-#             edge.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
-
-#     gradients = []
-
-#     for edge in edges:
-#         s, e, n = edge['indices']
-#         bc = mesh['bc'][edge['line_index']]
-
-#         match bc['mode']:
-#             case 'dirichlet':
-#                 g = np.zeros((e - s + 1), float)
-#             case 'neumann':
-#                 g = np.zeros((e - s + 1), float) + bc['value']
-#             case _:
-#                 g = sum(calc_gradient(edge, lo, bc['mode']) for lo in\
-#                         get_link_data(config, edge, bc))
-
-#         gradients.append(g)
-
-#     mesh.update({'gradients':gradients})
 
 
 

@@ -14,7 +14,6 @@ def simulate_2d(inputs:dict) -> None:
 
     while t_now < inputs['tf']:
         # calculate next timestep to satisfy courant constraint
-
         dt = min(inputs['dt_storage'], min(inputs['max_courant']*min(m['dx'],\
                  m['dy'])**2 / np.max(m['diffusivity']) for m in inputs['meshes'].values()))
 
@@ -27,9 +26,8 @@ def simulate_2d(inputs:dict) -> None:
 
             m['u_last'] = m['u_latest']
             update_properties(m)
-            #bound_gradients(config=inputs, meshkey=key)
             calc_edge_states(cfg=inputs)
-            
+
             m['u_latest'] = update_mesh(mesh=m,
                                         dt=dt,
                                         curv=m['curvature'],
