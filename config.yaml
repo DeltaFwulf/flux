@@ -22,16 +22,16 @@ meshes:
     - [[0.0, 0.2], [0.0, 0.1]]
     
     boundary_conditions:
-    - {edge: 0, mode: 'radiation', link: 'mesh_b/2'}
+    - {edge: 0, mode: 'conduction', link: 'mesh_b/2'}
     - {edge: 1, mode: 'neumann', value: 0.0}
     - {edge: 2, mode: 'neumann', value: 0.0}
     - {edge: 3, mode: 'neumann', value: 0.0}
 
   mesh_b:
-    dx: 0.01
-    dy: 0.01
+    dx: 0.005
+    dy: 0.005
     u0: 1000.0
-    material: 'aluminium'
+    material: 'stainless_steel'
     curvature: 0
     depth: 0.1
 
@@ -44,7 +44,7 @@ meshes:
     boundary_conditions:
     - {edge: 0, mode: 'neumann', value: 0.0}
     - {edge: 1, mode: 'neumann', value: 0.0}
-    - {edge: 2, mode: 'radiation', link: 'mesh_a/0'}
+    - {edge: 2, mode: 'conduction', link: 'mesh_a/0'}
     - {edge: 3, mode: 'neumann', value: 0.0}
 
 environment:

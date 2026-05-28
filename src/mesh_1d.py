@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from solvers import tdma
+from util import tdma
 from plotter import plot_temp_1d
 
 

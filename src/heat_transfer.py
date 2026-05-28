@@ -10,10 +10,7 @@ def conduction(edge:dict, link:dict) -> np.ndarray:
     na = link['k_bar'] / link['h_norm']
     nb = edge['k_bar'] / edge['h_norm']
 
-    u_int = (na*link['u_in'] + nb*edge['u_in']) / (na + nb)
-    # q = edge['k_bar']*(u_int - edge['u_in']) / edge['h_norm']
-
-    return u_int
+    return (na*link['u_in'] + nb*edge['u_in']) / (na + nb)
 
 
 

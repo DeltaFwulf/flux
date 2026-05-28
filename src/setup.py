@@ -158,13 +158,13 @@ def find_regions_2d(direction:str, ind_n:int, ind_p:np.ndarray, lines:list) -> l
                 break
 
         if is_edge:
-            reg.update({'type':'edge', 'direction':-t[2]*t[3], 'bc':l})
+            reg.update({'type':'edge', 'direction':-t[2]*t[3], 'line':l})
             regions.append(reg)
             continue
 
         # internal region
         if t[3] == -1:
-            reg.update({'type':'internal', 'bc_s':t_prev[1], 'bc_e':t[1]})
+            reg.update({'type':'internal', 'line_s':t_prev[1], 'line_e':t[1]})
             regions.append(reg)
             continue
 
@@ -186,7 +186,7 @@ def find_edges(mesh:dict) -> list:
 
                 edge = {}
                 edge.update({'indices':(s, e, k)})  # start, end, normal
-                edge.update({'line_index': reg['bc']})
+                edge.update({'line_index': reg['line']})
                 edge.update({'direction':(0, reg['direction'])})
                 edge.update({'h_norm':mesh['dy']})
                 edge.update({'emissivity':mesh['material']['emissivity']})
@@ -212,7 +212,7 @@ def find_edges(mesh:dict) -> list:
 
                 edge = {}
                 edge.update({'indices': (s, e, k)})
-                edge.update({'line_index':reg['bc']})
+                edge.update({'line_index':reg['line']})
                 edge.update({'direction':(reg['direction'], 0)})
                 edge.update({'h_norm':mesh['dx']})
                 edge.update({'emissivity':mesh['material']['emissivity']})

@@ -29,7 +29,7 @@ def simulate_2d(inputs:dict) -> None:
             update_properties(m)
             #bound_gradients(config=inputs, meshkey=key)
             calc_edge_states(cfg=inputs)
-
+            
             m['u_latest'] = update_mesh(mesh=m,
                                         dt=dt,
                                         curv=m['curvature'],
@@ -66,8 +66,6 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
     u_in = mesh['u_last']
     u_mid = np.zeros_like(u_in, float)
 
-    # FIXME: plug in new edge state logic
-
     # row slices (across x)
     for j in range(j_arr.size):
         for reg in mesh['regions_x'][j]:
@@ -77,18 +75,8 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
 
             if reg['type'] == 'edge':
 
-                edge = mesh['edges'][reg['bc']]
-                # bc = mesh['bc'][edge['line_index']]
-
-                # if bc['mode'] == 'dirichlet':
-                #     u_mid[s:e+1, j] = bc['value']
-                # else:
-                #     # apply gradient
-                #     d_edge = sum(edge['direction'])
-                #     u_mid[s:e+1,j] = u_in[s:e+1, j+d_edge] -\
-                #                      dy*mesh['gradients'][edge['line_index']]*d_edge
-
-                edge_state = mesh['edge_states'][reg['bc']]
+                edge = mesh['edges'][reg['line']]
+                edge_state = mesh['edge_states'][reg['line']]
 
                 if edge_state['type'] == 'direct':
                     u_mid[s:e+1, j] = edge_state['values']
@@ -98,26 +86,28 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
 
                 continue
 
-            bc_s = mesh['bc'][reg['bc_s']]
-            bc_e = mesh['bc'][reg['bc_e']]
-            grad_s = mesh['gradients'][reg['bc_s']][j - mesh['edges'][reg['bc_s']]['indices'][0]]
-            grad_e = mesh['gradients'][reg['bc_e']][j - mesh['edges'][reg['bc_e']]['indices'][0]]
+            line_s = reg['line_s']
+            line_e = reg['line_e']
+            type_s = mesh['edge_states'][line_s]['type']
+            type_e = mesh['edge_states'][line_e]['type']
+            val_s = mesh['edge_states'][line_s]['values'][j - mesh['edges'][line_s]['indices'][0]]
+            val_e = mesh['edge_states'][line_e]['values'][j - mesh['edges'][line_e]['indices'][0]]
 
             a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / (dx*i_arr[s+1:e]), 0.0 if\
-                        bc_e['mode'] == 'dirichlet' else -1.0]
+                        type_e == 'direct' else -1.0]
 
-            b = np.r_[1.0 if bc_s['mode'] == 'dirichlet' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
+            b = np.r_[1.0 if type_s == 'direct' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
 
-            c = np.r_[0.0 if bc_s['mode'] == 'dirichlet' else 1.0, -bxx_n[s+2:e+1,j] -\
+            c = np.r_[0.0 if type_s == 'direct' else 1.0, -bxx_n[s+2:e+1,j] -\
                         bx_n[s+2:e+1,j] / (dx*i_arr[s+1:e]), 0.0]
 
-            d = np.r_[bc_s['value'] if bc_s['mode'] == 'dirichlet' else dx*grad_s,\
+            d = np.r_[val_s if type_s == 'direct' else dx*val_s,\
 
                         byy_c[s+1:e,j-1]*u_in[s+1:e,j-1] +\
                         (1 - 2*byy_c[s+1:e,j])*u_in[s+1:e,j] +\
                         byy_c[s+1:e,j+1]*u_in[s+1:e,j+1],\
 
-                        bc_e['value'] if bc_e['mode'] == 'dirichlet' else dx*grad_e]
+                        val_e if type_e == 'direct' else dx*val_e]
 
             u_mid[s:e+1,j] = tdma(u_in[s:e+1,j], a, b, c, d)
 
@@ -131,36 +121,37 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
 
             if reg['type'] == 'edge':
 
-                edge = mesh['edges'][reg['bc']]
-                bc = mesh['bc'][edge['line_index']]
+                edge = mesh['edges'][reg['line']]
+                edge_state = mesh['edge_states'][reg['line']]
 
-                if bc['mode'] == 'dirichlet':
-                    u_out[i,s:e+1] = bc['value']
+                if edge_state['type'] == 'direct':
+                    u_mid[i, s:e+1] = edge_state['values']
                 else:
                     d_edge = sum(edge['direction'])
-                    u_out[i,s:e+1] = u_mid[i+d_edge, s:e+1] -\
-                                     dx*mesh['gradients'][edge['line_index']]*d_edge
+                    u_mid[i, s:e+1] = u_in[i+d_edge, s:e+1] - dy*edge_state['values']*d_edge
 
                 continue
 
-            bc_s = mesh['bc'][reg['bc_s']]
-            bc_e = mesh['bc'][reg['bc_e']]
-            grad_s = mesh['gradients'][reg['bc_s']][i - mesh['edges'][reg['bc_s']]['indices'][0]]
-            grad_e = mesh['gradients'][reg['bc_e']][i - mesh['edges'][reg['bc_e']]['indices'][0]]
+            line_s = reg['line_s']
+            line_e = reg['line_e']
+            type_s = mesh['edge_states'][line_s]['type']
+            type_e = mesh['edge_states'][line_e]['type']
+            val_s = mesh['edge_states'][line_s]['values'][i - mesh['edges'][line_s]['indices'][0]]
+            val_e = mesh['edge_states'][line_e]['values'][i - mesh['edges'][line_e]['indices'][0]]
 
-            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if bc_e['mode'] == 'dirichlet' else -1.0]
+            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if type_e == 'direct' else -1.0]
 
-            b = np.r_[1.0 if bc_s['mode'] == 'dirichlet' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
+            b = np.r_[1.0 if type_s == 'direct' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
 
-            c = np.r_[0.0 if bc_s['mode'] == 'dirichlet' else 1.0, -byy_n[i,s+2:e+1], 0.0]
+            c = np.r_[0.0 if type_s == 'direct' else 1.0, -byy_n[i,s+2:e+1], 0.0]
 
-            d = np.r_[bc_s['value'] if bc_s['mode'] == 'dirichlet' else dy*grad_s,\
+            d = np.r_[val_s if type_s == 'direct' else dy*val_s,\
 
                 (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / (dx*i_arr[i]))*u_mid[i+1,s+1:e] +\
                 (1 - 2*bxx_c[i,s+1:e])*u_mid[i,s+1:e] +\
                 (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / (dx*i_arr[i]))*u_mid[i-1,s+1:e],
 
-                bc_e['value'] if bc_e['mode'] == 'dirichlet' else dy*grad_e]
+                val_e if type_e == 'direct' else dy*val_e]
 
             u_out[i,s:e+1] = tdma(u_mid[i,s:e+1], a, b, c, d)
 
