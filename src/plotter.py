@@ -65,7 +65,7 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
                             cmap='magma',
                             norm=norm,
                             alpha=1.0,
-                            linewidth=0.8)
+                            linewidth=0.5)
 
             # ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
             #            zdir='z', offset=u_min, cmap='coolwarm')

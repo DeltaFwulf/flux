@@ -5,15 +5,15 @@ import numpy as np
 
 
 def conduction(edge:dict, link:dict) -> np.ndarray:
-    """Calculates thermal flux due to conduction between an edge and link object."""
+    """Calculates common interface temperature between conducting faces."""
 
     na = link['k_bar'] / link['h_norm']
     nb = edge['k_bar'] / edge['h_norm']
 
     u_int = (na*link['u_in'] + nb*edge['u_in']) / (na + nb)
-    q = edge['k_bar']*(u_int - edge['u_in']) / edge['h_norm']
+    # q = edge['k_bar']*(u_int - edge['u_in']) / edge['h_norm']
 
-    return q
+    return u_int
 
 
 

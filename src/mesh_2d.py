@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from util import tdma, bound_gradients, update_properties
+from util import tdma, calc_edge_states, update_properties
 
 
 
@@ -23,11 +23,12 @@ def simulate_2d(inputs:dict) -> None:
         if store:
             t = np.hstack((t, t_now))
 
-        for key, m in inputs['meshes'].items():
+        for m in inputs['meshes'].values():
 
             m['u_last'] = m['u_latest']
             update_properties(m)
-            bound_gradients(config=inputs, mesh_name=key)
+            #bound_gradients(config=inputs, meshkey=key)
+            calc_edge_states(cfg=inputs)
 
             m['u_latest'] = update_mesh(mesh=m,
                                         dt=dt,
@@ -65,6 +66,8 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
     u_in = mesh['u_last']
     u_mid = np.zeros_like(u_in, float)
 
+    # FIXME: plug in new edge state logic
+
     # row slices (across x)
     for j in range(j_arr.size):
         for reg in mesh['regions_x'][j]:
@@ -75,15 +78,23 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
             if reg['type'] == 'edge':
 
                 edge = mesh['edges'][reg['bc']]
-                bc = mesh['bc'][edge['line_index']]
+                # bc = mesh['bc'][edge['line_index']]
 
-                if bc['mode'] == 'dirichlet':
-                    u_mid[s:e+1, j] = bc['value']
+                # if bc['mode'] == 'dirichlet':
+                #     u_mid[s:e+1, j] = bc['value']
+                # else:
+                #     # apply gradient
+                #     d_edge = sum(edge['direction'])
+                #     u_mid[s:e+1,j] = u_in[s:e+1, j+d_edge] -\
+                #                      dy*mesh['gradients'][edge['line_index']]*d_edge
+
+                edge_state = mesh['edge_states'][reg['bc']]
+
+                if edge_state['type'] == 'direct':
+                    u_mid[s:e+1, j] = edge_state['values']
                 else:
-                    # apply gradient
                     d_edge = sum(edge['direction'])
-                    u_mid[s:e+1,j] = u_in[s:e+1, j+d_edge] -\
-                                     dy*mesh['gradients'][edge['line_index']]*d_edge
+                    u_mid[s:e+1, j] = u_in[s:e+1, j+d_edge] - dy*edge_state['values']*d_edge
 
                 continue
 

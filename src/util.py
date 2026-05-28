@@ -5,7 +5,7 @@ import numpy as np
 from heat_transfer import conduction, convection, radiation
 
 # FIXME: bound_gradients does not currently support multiple transfer modes, only multiple links
-
+# TODO: get all material-specific data for edges using same function as for link_objects, with new mode key idk
 
 
 def tdma(x, a, b, c, d) -> np.ndarray:
@@ -32,50 +32,114 @@ def tdma(x, a, b, c, d) -> np.ndarray:
 
 
 
-def bound_gradients(config:dict, mesh_name:str) -> float:
-    """Calculates the edge temperature gradients for all edges in the named mesh, 
-       according to its boundary conditions."""
+def calc_edge_states(cfg:dict) -> None:
+    """Updates all mesh edge state arrays in the simulation."""
 
-    mesh = config['meshes'].get(mesh_name)
-    edges = mesh['edges']
-    for edge in edges: # process thermal data for use
+    for mesh in cfg['meshes']:
 
-        s, e, n = edge['indices']
-        d = sum(edge['direction'])
+        # edges now store both a value array and gradient array. One must be set to None
+        edge_states = []
 
-        # get appropriate slice of temperature, conductivity, etc.
-        if edge['direction'][0] == 0: # slice along x axis
-            edge.update({'u':mesh['u_last'][s:e+1, n]})
-            edge.update({'u_in':mesh['u_last'][s:e+1, n+d]})
-            edge.update({'k_bar':0.5*(mesh['k'][s:e+1, n] + mesh['k'][s:e+1, n+d])})
+        for l, edge in enumerate(mesh['edges']):
 
-        else:
-            edge.update({'u':mesh['u_last'][n, s:e+1]})
-            edge.update({'u_in':mesh['u_last'][n+d, s:e+1]})
-            edge.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
+            s, e, n = edge['indices']
+            d = sum(edge['direction'])
 
-    gradients = []
+            edge_link = edge | {'emissivity':mesh['material']['emissivity']}
 
-    for edge in edges:
-        s, e, n = edge['indices']
-        bc = mesh['bc'][edge['line_index']]
+            # get appropriate slice of temperature, conductivity, etc.
+            if edge['direction'][0] == 0: # slice along x axis
+                edge_link.update({'u':mesh['u_last'][s:e+1, n]})
+                edge_link.update({'u_in':mesh['u_last'][s:e+1, n+d]})
+                edge_link.update({'k_bar':0.5*(mesh['k'][s:e+1, n] + mesh['k'][s:e+1, n+d])})
 
-        match bc['mode']:
-            case 'dirichlet':
-                g = np.zeros((e - s + 1), float)
-            case 'neumann':
-                g = np.zeros((e - s + 1), float) + bc['value']
-            case _:
-                g = sum(calc_gradient(edge, lo, bc['mode']) for lo in\
-                        get_link_objects(config, edge, bc))
+            else:
+                edge_link.update({'u':mesh['u_last'][n, s:e+1]})
+                edge_link.update({'u_in':mesh['u_last'][n+d, s:e+1]})
+                edge_link.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
 
-        gradients.append(g)
+            state_val = np.zeros((s + e - 1), float)
 
-    mesh.update({'gradients':gradients})
+            for bc in mesh['edge_bcs'][l]:
+                pair_link = get_link_data(cfg, edge, bc)
+
+                match bc['mode']:
+                    case['dirichlet']:
+                        state_type = 'direct'
+                        state_val += bc['value']
+                        break
+
+                    case['neumann']:
+                        state_type = 'gradient'
+                        state_val += bc['value']
+                        break
+
+                    case['conduction']:
+                        state_type = 'direct'
+                        state_val = conduction(edge_link, pair_link)
+                        break
+
+                    case['convection']:
+                        state_type = 'gradient'
+                        q = convection(edge_link, pair_link, bc['mode'])
+                        state_val -= sum(edge['direction'])*q / edge_link['k_bar']
+
+                    case['radiation']:
+                        state_type = 'gradient'
+                        q = radiation(edge_link, pair_link)
+                        state_val -= sum(edge['direction'])*q / edge_link['k_bar']
+
+            edge_states.append({'type':state_type, 'values':state_val})
+
+        mesh.update({'edge_states':edge_states})
 
 
 
-def get_link_objects(cfg:dict, edge:dict, bc:dict) -> dict:
+# def bound_gradients(config:dict, meshkey:str) -> None:
+#     """Calculates the edge temperature gradients for all edges in the named mesh, 
+#        according to its boundary conditions."""
+
+#     mesh = config['meshes'].get(meshkey)
+#     edges = mesh['edges']
+
+#     for edge in edges: # process thermal data for use
+
+#         s, e, n = edge['indices']
+#         d = sum(edge['direction'])
+
+#         # get appropriate slice of temperature, conductivity, etc.
+#         if edge['direction'][0] == 0: # slice along x axis
+#             edge.update({'u':mesh['u_last'][s:e+1, n]})
+#             edge.update({'u_in':mesh['u_last'][s:e+1, n+d]})
+#             edge.update({'k_bar':0.5*(mesh['k'][s:e+1, n] + mesh['k'][s:e+1, n+d])})
+
+#         else:
+#             edge.update({'u':mesh['u_last'][n, s:e+1]})
+#             edge.update({'u_in':mesh['u_last'][n+d, s:e+1]})
+#             edge.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
+
+#     gradients = []
+
+#     for edge in edges:
+#         s, e, n = edge['indices']
+#         bc = mesh['bc'][edge['line_index']]
+
+#         match bc['mode']:
+#             case 'dirichlet':
+#                 g = np.zeros((e - s + 1), float)
+#             case 'neumann':
+#                 g = np.zeros((e - s + 1), float) + bc['value']
+#             case _:
+#                 g = sum(calc_gradient(edge, lo, bc['mode']) for lo in\
+#                         get_link_data(config, edge, bc))
+
+#         gradients.append(g)
+
+#     mesh.update({'gradients':gradients})
+
+
+
+def get_link_data(cfg:dict, edge:dict, bc:dict) -> dict:
     """
     Returns all link objects specified by the boundary condition
     in a list.
@@ -142,18 +206,18 @@ def get_link_objects(cfg:dict, edge:dict, bc:dict) -> dict:
 
 
 
-# XXX: remove function? Put into gradient function?
-def calc_gradient(edge:dict, link:dict, mode:str) -> np.ndarray:
-    """Calculates the edge temperature gradient given boundary condition."""
+# # XXX: remove function? Put into gradient function?
+# def calc_gradient(edge:dict, link:dict, mode:str) -> np.ndarray:
+#     """Calculates the edge temperature gradient given boundary condition."""
 
-    if mode == 'conduction':
-        q = conduction(edge, link)
-    elif mode == 'radiation':
-        q = radiation(edge, link)
-    else:
-        q = convection(edge, link, mode)
+#     if mode == 'conduction':
+#         q = conduction(edge, link)
+#     elif mode == 'radiation':
+#         q = radiation(edge, link)
+#     else:
+#         q = convection(edge, link, mode)
 
-    return -sum(edge['direction'])*q / edge['k_bar']
+#     return -sum(edge['direction'])*q / edge['k_bar']
 
 
 
