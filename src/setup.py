@@ -75,8 +75,7 @@ def setup_2d(defname:str):
     sim_inputs.update({'meshes':meshes})
 
     # Environment
-    environment = {}
-    sim_inputs.update({'environment':environment})
+    sim_inputs.update({'environment':cfg['environment']})
 
     return sim_inputs
 
@@ -188,18 +187,21 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'indices':(s, e, k)})  # start, end, normal
                 edge.update({'line_index': reg['line']})
                 edge.update({'direction':(0, reg['direction'])})
-                edge.update({'h_norm':mesh['dy']})
+                edge.update({'hp':mesh['dx']})
+                edge.update({'hn':mesh['dy']})
                 edge.update({'emissivity':mesh['material']['emissivity']})
 
                 if mesh['curvature'] == 0:
                     areas = mesh['depth']*mesh['dx']*np.r_[1, 2*np.ones(e - s - 1, float), 1]
                     edge.update({'areas':areas})
+                    edge.update({'perimeter':2*(mesh['depth'] + mesh['dx']*(e - s))})
                 elif mesh['curvature'] == 1:
                     r = mesh['dx']*np.arange(reg['bounds'][0], reg['bounds'][1] + 1)
                     areas = pi*np.r_[((r[1] + r[0])**2 / 4 - r[0]**2),
                                      ((r[2:]+r[1:-1])**2 - (r[1:-1] + r[:-2])**2) / 4,
                                      (r[-1]**2 - (r[-1] + r[-2])**2 / 4)]
                     edge.update({'areas':areas})
+                    edge.update({'perimeter':2*pi*(r[-1] + r[0])})
 
                 edges.append(edge)
 
@@ -214,7 +216,8 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'indices': (s, e, k)})
                 edge.update({'line_index':reg['line']})
                 edge.update({'direction':(reg['direction'], 0)})
-                edge.update({'h_norm':mesh['dx']})
+                edge.update({'hp':mesh['dy']})
+                edge.update({'hn':mesh['dx']})
                 edge.update({'emissivity':mesh['material']['emissivity']})
 
                 areas = np.zeros_like(edge['indices'])
@@ -231,6 +234,7 @@ def find_edges(mesh:dict) -> list:
     # sort edges by line index
     edges = [edges[p] for p in np.argsort([edge['line_index'] for edge in edges])]
     mesh.update({'edges':edges})
+
 
 
 def calc_bc_relations(mesh:dict):

@@ -29,4 +29,4 @@ IN_26_firebrick:
   cp: [500, 500, 500, 500]
   rho: [618, 618, 618, 618]
   emissivity: 0.8
-  colour: 'bone'
+  colour: 'papayawhip'

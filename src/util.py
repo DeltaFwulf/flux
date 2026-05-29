@@ -83,7 +83,7 @@ def calc_edge_states(cfg:dict) -> None:
                     case 'convection':
                         state_type = 'gradient'
                         pair_link = get_link_data(cfg, edge, boundary_condition)
-                        q = convection(edge_link, pair_link, boundary_condition['mode'])
+                        q = convection(edge_link, pair_link)
                         state_val -= sum(edge['direction'])*q / edge_link['k_bar']
 
                     case 'radiation':
@@ -112,7 +112,7 @@ def get_link_data(cfg:dict, edge:dict, bc:dict) -> dict:
 
     mesh = cfg['meshes'][name.split('/')[0]]
     link_obj = deepcopy(mesh['edges'][int(name.split('/')[1])]) | {'type':'edge'}
-    link_obj.update({'h_norm':mesh['dx'] if link_obj['direction'][0] == 0 else mesh['dy']})
+    link_obj.update({'hn':mesh['dx'] if link_obj['direction'][0] == 0 else mesh['dy']})
     s, e, n = link_obj['indices']
     u = (mesh['u_last'][s:e+1, n] if link_obj['direction'][0] == 0 else\
             mesh['u_last'][n, s:e+1]).ravel()
@@ -140,15 +140,12 @@ def get_link_data(cfg:dict, edge:dict, bc:dict) -> dict:
         edge_pts = np.arange(0, e_edge - s_edge + 1) / (e_edge - s_edge)
         link_pts = np.arange(0, e - s + 1) / (e - s)
 
-        # interpolate for new array of u, u_in, k_bar
+        # align values to edge nodes
         u = np.interp(edge_pts, link_pts, u)
         u_in = np.interp(edge_pts, link_pts, u_in)
         k_bar = np.interp(edge_pts, link_pts, k_bar)
 
         link_obj.update({'u':u, 'u_in':u_in, 'k_bar':k_bar})
-
-    else: # TODO: add convection setup
-        pass
 
     return link_obj
 
