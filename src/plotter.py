@@ -23,12 +23,19 @@ def plot_temp_1d(*, x:np.ndarray, t:np.ndarray, u:np.ndarray, **kwargs) -> None:
 
         regions = kwargs['regions'] if kwargs.get('regions') is not None else [[0, x.size - 1]]
         for i, r in enumerate(regions):
-            ax.plot(x[r[0]:r[1]+1], u[frame,r[0]:r[1]+1], linestyle='-', color='red', label=f"transient, region {i}")
+            ax.plot(x[r[0]:r[1]+1],
+                    u[frame,r[0]:r[1]+1],
+                    linestyle='-',
+                    color='red',
+                    label=f"transient, region {i}")
 
             if kwargs.get('show_final') is True:
-                ax.plot(x[r[0]:r[1]+1], u[-1,r[0]:r[1]+1], linestyle='--', color='b', label=f"final, region {i}")
+                ax.plot(x[r[0]:r[1]+1],
+                        u[-1,r[0]:r[1]+1],
+                        linestyle='--',
+                        color='b',
+                        label=f"final, region {i}")
 
-        #ax.plot(x, u[frame,:], linestyle='-', color='red', label='transient')
         ax.set_xlabel("x, m")
         ax.set_ylabel("u, K")
         ax.set_ylim(np.min(u), np.max(u)*1.05)
@@ -45,29 +52,41 @@ def plot_temp_1d(*, x:np.ndarray, t:np.ndarray, u:np.ndarray, **kwargs) -> None:
 
 
 
-def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
+def animate_temp_2d(results:dict, **kwargs) -> None:
     """Animates the temperatures of multiple meshes, formed from rectangular elements."""
 
-    # TODO: don't plot void regions at all, avoid awkward edge slopes
 
     def update(frame):
-        ax_transient.clear()
+        ax.clear()
 
-        for k in meshes.keys():
-            surf = ax_transient.plot_surface(xm[k], ym[k], meshes[k]['u'][:,:,frame].transpose(),
-                                             cmap='magma',
-                                             norm=norm)
+        for k, m in meshes.items():
+            ax.plot_surface(xm[k], ym[k], m['u'][:,:,frame].transpose(),
+                            edgecolor=m['material']['colour'],
+                            cmap='magma',
+                            norm=norm,
+                            alpha=1.0,
+                            linewidth=0.5)
 
-        ax_transient.set_zlim(u_min, u_max)
-        ax_transient.set_aspect('equalxy')
-        ax_transient.set_xlabel('x, m')
-        ax_transient.set_ylabel('y, m')
-        ax_transient.set_zlabel('u, K')
-        ax_transient.set_title(f"Mesh Temperature at t = {t[frame]:0.1f} s")
-        return surf
+            # ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
+            #            zdir='z', offset=u_min, cmap='coolwarm')
+
+            ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
+                       zdir='x', offset=min(m['x']) - side_offset, cmap='coolwarm')
+
+        ax.set_zlim(u_min, u_max)
+        ax.set_aspect('equalxy')
+        ax.set_xlabel('x, m')
+        ax.set_ylabel('y, m')
+        ax.set_zlabel('u, K')
+        ax.set_title(f"Mesh Temperature at t = {t[frame]:0.1f} s")
+
+
+    meshes = results['meshes']
+    t = results['t']
 
     u_min = min(np.min(m['u']) for m in meshes.values())
     u_max = max(np.max(m['u']) for m in meshes.values())
+    side_offset = max(m['dx'] for m in meshes.values())
 
     xm = {}
     ym = {}
@@ -80,17 +99,67 @@ def plot_temp_2d(*, meshes:dict, t:np.ndarray, **kwargs) -> None:
     plt.style.use('dark_background')
     norm = plt.Normalize(u_min, u_max)
 
-    # if kwargs.get('show_final') is True:
-    #     fig = plt.figure()
-    #     ax_transient = fig.add_subplot(1, 2, 1, projection='3d')
-    #     ax_final = fig.add_subplot(1, 2, 2, projection='3d')
-    #     ax_final.plot_surface(xm, ym, u[:,:,-1].transpose, cmap='magma', norm=norm)
-    #     ax_final.set_title(f"Final Temperature @ t = {t[-1]:0.1f} s")
-    # else:
-    #     fig, ax_transient = plt.subplots(subplot_kw={'projection':'3d'})
-
-    fig, ax_transient = plt.subplots(subplot_kw={'projection':'3d'})
+    fig, ax = plt.subplots(subplot_kw={'projection':'3d'})
     fig.set_tight_layout(True)
+
+    interval = 50 if kwargs.get('interval') is not float else kwargs['interval']
+    _ = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
+    plt.show()
+
+
+
+def plot2d_flat(results:dict, **kwargs) -> None:
+    """Plots transient mesh temperatures as pcolormesh, with mesh outlines."""
+
+    # TODO: make handles for pcolormesh values, so that axis doesn't have to be cleared
+    #       every frame
+
+    meshes = results['meshes']
+    t = results['t']
+
+    u_min = min(np.min(m['u']) for m in meshes.values())
+    u_max = max(np.max(m['u']) for m in meshes.values())
+    norm = plt.Normalize(u_min, u_max)
+
+    fig, ax_transient = plt.subplots()
+    fig.set_tight_layout(True)
+
+    xm = {}
+    ym = {}
+    for k, m in meshes.items():
+        xk, yk = np.meshgrid(m['x'], m['y'])
+        xm.update({k:xk})
+        ym.update({k:yk})
+
+
+    def plot_mesh(ax, xm:np.ndarray, ym:np.ndarray, u:np.ndarray):
+        """Draws a pcolormesh and returns the object"""
+        return ax.pcolormesh(xm, ym, u, shading='gouraud', cmap='magma', norm=norm)
+
+
+    def update(frame):
+        """Draws next animation frame."""
+
+        ax_transient.clear()
+
+        for k, m in meshes.items():
+
+            plot_mesh(ax_transient, xm[k], ym[k], m['u'][:,:,frame].transpose())
+
+            for line in m['lines']:
+                ax_transient.plot(np.array([line[0][0], line[1][0]])*m['dx'],
+                                  np.array([line[0][1], line[1][1]])*m['dy'],
+                                  linestyle='-',
+                                  color=m['material']['colour'])
+
+        ax_transient.set_aspect('equal')
+        ax_transient.set_xlabel('x, m')
+        ax_transient.set_ylabel('y, m')
+        ax_transient.set_title(f"Mesh Temperature at t = {t[frame]:0.1f} s")
+
+
+    pcm = plot_mesh(ax_transient, xm[k], ym[k], m['u'][:,:,0].transpose())
+    fig.colorbar(mappable=pcm).set_label("Temperature (K)")
 
     interval = 50 if kwargs.get('interval') is not float else kwargs['interval']
     _ = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)

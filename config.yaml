@@ -1,0 +1,57 @@
+# runtime settings for multi_2d
+
+tf: 1000.0
+dt_storage: 10.0
+theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
+max_courant: 0.3
+
+meshes:
+
+  mesh_a:
+    dx: 0.01
+    dy: 0.01
+    u0: 500.0
+    material: 'IN_26_firebrick'
+    curvature: 0
+    depth: 0.1
+
+    lines:
+    - [[0.0, 0.1], [0.2, 0.1]]
+    - [[0.2, 0.1], [0.2, 0.2]]
+    - [[0.2, 0.2], [0.0, 0.2]]
+    - [[0.0, 0.2], [0.0, 0.1]]
+    
+    boundary_conditions:
+    - {edge: 0, mode: 'conduction', link: 'mesh_b/2'}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'convection', link: 'ambient_air'}
+    - {edge: 3, mode: 'convection', link: 'ambient_air'}
+
+  mesh_b:
+    dx: 0.01
+    dy: 0.01
+    u0: 600
+    material: 'IN_26_firebrick'
+    curvature: 0
+    depth: 0.1
+
+    lines:
+    - [[0.0, 0.0], [0.2, 0.0]]
+    - [[0.2, 0.0], [0.2, 0.1]]
+    - [[0.2, 0.1], [0.0, 0.1]]
+    - [[0.0, 0.1], [0.0, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'convection', link: 'ambient_air'}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'conduction', link: 'mesh_a/0'}
+    - {edge: 3, mode: 'convection', link: 'ambient_air'}
+
+environment:
+  
+  ambient_air:
+    name: 'Air'
+    temperature: 288.0
+    pressure: 101325
+    phase: 'gas'
+    velocity: 0.0

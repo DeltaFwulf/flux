@@ -1,0 +1,57 @@
+# Cross sectional view of the OctoForge chamber. Heating elements radiate to the wall and chamber, which re-radiates to the chamber.
+# Heat is lost through the side via natural convection
+
+tf: 1000.0
+dt_storage: 10.0
+theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
+max_courant: 0.5
+
+meshes:
+
+  mesh_a:
+    dx: 0.01
+    dy: 0.01
+    u0: 500.0
+    material: 'stainless_steel'
+    curvature: 0
+    depth: 0.1
+
+    lines:
+    - [[0.0, 0.1], [0.2, 0.1]]
+    - [[0.2, 0.1], [0.2, 0.2]]
+    - [[0.2, 0.2], [0.0, 0.2]]
+    - [[0.0, 0.2], [0.0, 0.1]]
+    
+    boundary_conditions:
+    - {edge: 0, mode: 'conduction', link: 'mesh_b/2'}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'neumann', value: 0.0}
+    - {edge: 3, mode: 'neumann', value: 0.0}
+
+  mesh_b:
+    dx: 0.01
+    dy: 0.01
+    u0: 600
+    material: 'stainless_steel'
+    curvature: 0
+    depth: 0.1
+
+    lines:
+    - [[0.0, 0.0], [0.2, 0.0]]
+    - [[0.2, 0.0], [0.2, 0.1]]
+    - [[0.2, 0.1], [0.0, 0.1]]
+    - [[0.0, 0.1], [0.0, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'conduction', link: 'mesh_a/0'}
+    - {edge: 3, mode: 'neumann', value: 0.0}
+
+environment:
+  
+  ambient_air:
+    name: 'humid_air'
+    temperature: 288.0
+    pressure: 101325
+    phase: 'gas'
