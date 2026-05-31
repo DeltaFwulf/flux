@@ -27,29 +27,38 @@ def setup_2d(defname:str):
     sim_inputs.update({'dt_storage':cfg['dt_storage']})
     sim_inputs.update({'theta':cfg['theta']})
     sim_inputs.update({'max_courant':cfg['max_courant']})
+    sim_inputs.update({'force_finer':cfg['force_finer']})
 
     # Meshes
     meshes = {}
     for key, m in cfg['meshes'].items():
 
-        # snap lines to the grid and convert to mesh indices
-        m['lines'] = [tuple((round(p[0] / m['dx']), round(p[1] / m['dy'])) for p in l)\
-                 for l in m['lines']]
+        z = 0
+        while z < 2:
+            # snap lines to the grid and convert to mesh indices
+            m['line_indices'] = [tuple((round(p[0] / m['dx']), round(p[1] / m['dy'])) for p in l)\
+                    for l in m['lines']]
 
-        i_min = min(p[0] for l in m['lines'] for p in l)
-        i_max = max(p[0] for l in m['lines'] for p in l)
-        j_min = min(p[1] for l in m['lines'] for p in l)
-        j_max = max(p[1] for l in m['lines'] for p in l)
+            i_min = min(p[0] for l in m['line_indices'] for p in l)
+            i_max = max(p[0] for l in m['line_indices'] for p in l)
+            j_min = min(p[1] for l in m['line_indices'] for p in l)
+            j_max = max(p[1] for l in m['line_indices'] for p in l)
 
-        m.update({'i_arr':np.arange(i_min, i_max + 1, 1)})
-        m.update({'j_arr':np.arange(j_min, j_max + 1, 1)})
+            m.update({'i_arr':np.arange(i_min, i_max + 1, 1)})
+            m.update({'j_arr':np.arange(j_min, j_max + 1, 1)})
 
-        m.update({'regions_x':[find_regions_2d(direction='x', ind_n=j, ind_p=m['i_arr'],\
-            lines=m['lines']) for j in m['j_arr']]})
-        m.update({'regions_y':[find_regions_2d(direction='y', ind_n=i, ind_p=m['j_arr'],\
-            lines=m['lines']) for i in m['i_arr']]})
+            # get all x slice regions
+            m.update({'regions_x':[slice_regions(m, direction='x', n=j) for j in m['j_arr']]})
 
-        # replace material string with material definition
+            # get all y slice regions
+            m.update({'regions_y':[slice_regions(m, direction='y', n=i) for i in m['i_arr']]})
+
+            # rescale mesh
+            if z == 0:
+                fit_mesh_resolution(m, cfg['force_finer'])
+
+            z += 1
+
         mat = materials.get(m['material'])
         if mat is None:
             print(f"Material {m['material']} is not found at /src/data/materials.yaml.")
@@ -81,25 +90,26 @@ def setup_2d(defname:str):
 
 
 
-def find_regions_2d(direction:str, ind_n:int, ind_p:np.ndarray, lines:list) -> list[list]:
-    """
-    Uses a transition method to identify all regions in this slice.
+def slice_regions(mesh:dict, direction:str, n:int) -> list[dict]:
+    """Calculates regions within a mesh slice.
 
-    Regions are either 'i', internal or 'b', bounding.
+    Regions are returned in ascending index order (+x or +y direction). These regions
+    are used by the mesh ADI solver to identify where to apply boundary conditions
+    and when to apply edge states.
 
-    Internal regions are solved for in the TDMA steps.
-    Bounding regions have boundary conditions applied in the BC step, in the correct direction.
+    The following variables are used:
+    - direction; 'x' or 'y'. This is the direction parallel to the slice.
+    - ind_n; this is the index of the slice, in the normal direction.
+    - ind_p; this is the array of indices within the slice, in the parallel direction.
+    - line_inds; this is the array of line boundary indices, snapped to the mesh grid.
+    - line_pts; this is the array of line boundary point locations, not snapped to mesh grid.
     
-    boundary lines have a direction, 'l' or 'r' in which to apply the boundary.
-    'l' is descending index, 'r' is ascending index.
+    Ouptutted regions contain the following:
+    - type; either 'edge' or 'internal'.
+    - direction; +- 1. This is the direction, normal to the edge line to the mesh interior.
+    - if internal, line_s and line_e; give the line indices of the bounding mesh edges.
     
-    ind_n is the slice's index in the normal axis
-    ind_p is the array of indices along the parallel direction
-
-    each region has a type and bounding points. If edge it has a direction and boundary number
-    {'type':'internal', 'bounds':(pa, pb)}
-    {'type':'edge', 'bounds':(pa, pb), 'direction':1, 'bc_index':5}
-    direction is +1 for ascending order, -1 for descending. (towards next internal region)
+    The output is a list of all region dictionaries in the slice, in ascending order.
     """
 
     a = 0 if direction == 'x' else 1 # gives line coordinate to inspect for normality
@@ -107,12 +117,12 @@ def find_regions_2d(direction:str, ind_n:int, ind_p:np.ndarray, lines:list) -> l
     lefts = 0
     rights = 0
 
-    for p in ind_p:
+    for p in (mesh['i_arr'] if direction == 'x' else mesh['j_arr']):
 
-        for line_index, line in enumerate(lines):
+        for l, line in enumerate(mesh['line_indices']):
 
-            na = line[0][1 - a] - ind_n
-            nb = line[1][1 - a] - ind_n
+            na = line[0][1 - a] - n
+            nb = line[1][1 - a] - n
             is_normal = line[0][a] == line[1][a]
             spans = copysign(1, na) != copysign(1, nb) or na*nb == 0
             touches = p in (line[0][a], line[1][a])
@@ -120,20 +130,24 @@ def find_regions_2d(direction:str, ind_n:int, ind_p:np.ndarray, lines:list) -> l
             if is_normal and spans and touches:
 
                 if na*nb != 0:                      # both
-                    d_normal = 2
+                    dn = 2
                     lefts += 1
                     rights += 1
-                    d_parallel = 1 if (rights % 2 == lefts % 2 == 1) else -1
+                    dp = 1 if (rights % 2 == lefts % 2 == 1) else -1
                 elif na > 0 or nb > 0:      # right
-                    d_normal = 1
+                    dn = 1
                     rights += 1
-                    d_parallel = 1 if rights % 2 == 1 else -1
+                    dp = 1 if rights % 2 == 1 else -1
                 else:                               # left
-                    d_normal = -1
+                    dn = -1
                     lefts += 1
-                    d_parallel = 1 if lefts % 2 == 1 else -1
+                    dp = 1 if lefts % 2 == 1 else -1
 
-                transitions.append([p, line_index, d_normal, d_parallel])
+                transitions.append({'ind_parallel':p,
+                                    'line_index':l,
+                                    'normal':dn,
+                                    'parallel':dp})
+
                 break
 
     regions = []
@@ -144,29 +158,30 @@ def find_regions_2d(direction:str, ind_n:int, ind_p:np.ndarray, lines:list) -> l
         t_prev = transitions[i-1]
 
         # region bounds
-        na = (t_prev[0], ind_n) if a == 0 else (ind_n, t_prev[0])
-        nb = (t[0], ind_n) if a == 0 else (ind_n, t[0])
+        na = (t_prev['ind_parallel'], n) if a == 0 else (n, t_prev['ind_parallel'])
+        nb = (t['ind_parallel'], n) if a == 0 else (n, t['ind_parallel'])
         reg = {'bounds':(na[a], nb[a])}
 
-        # edge region
         is_edge = False
-        l = 0
-        for l, line in enumerate(lines):
+        for l, line in enumerate(mesh['line_indices']):
             if na in line and nb in line:
                 is_edge = True
                 break
 
+        # edge region
         if is_edge:
-            reg.update({'type':'edge', 'direction':-t[2]*t[3], 'line':l})
+            reg.update({'length':abs(mesh['lines'][l][1][a] - mesh['lines'][l][0][a])})
+            reg.update({'type':'edge', 'direction':-t['normal']*t['parallel'], 'line':l})
             regions.append(reg)
-            continue
 
         # internal region
-        if t[3] == -1:
-            reg.update({'type':'internal', 'line_s':t_prev[1], 'line_e':t[1]})
-            regions.append(reg)
-            continue
+        elif t['parallel'] == -1:
+            reg.update({'length':abs(mesh['lines'][t['line_index']][0][a] -
+                                 mesh['lines'][t_prev['line_index']][0][a])})
 
+            reg.update({'type':'internal', 'line_s':t_prev['line_index'], 'line_e':t['line_index']})
+            regions.append(reg)
+            
     return regions
 
 
@@ -248,3 +263,30 @@ def calc_bc_relations(mesh:dict):
         edge_bcs.append(relevant)
 
     mesh.update({'edge_bcs':edge_bcs})
+
+
+
+def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]:
+    """Calculates a mesh resolution (dx, dy) that tiles the mesh with integer elements."""
+
+    widths_x = [reg['length'] for slc in mesh['regions_x'] for reg in slc]
+    widths_y = [reg['length'] for slc in mesh['regions_y'] for reg in slc]
+
+    power_x = max(len(str(pt[0]).split(".")[1]) for line in mesh['lines'] for pt in line)
+    power_y = max(len(str(pt[1]).split(".")[1]) for line in mesh['lines'] for pt in line)
+
+    w_scaled_x = [round(w*10**power_x) for w in widths_x]
+    w_scaled_y = [round(w*10**power_y) for w in widths_y]
+
+    dx = float(np.gcd.reduce(w_scaled_x)) / 10**power_x
+    dy = float(np.gcd.reduce(w_scaled_y)) / 10**power_y
+
+    if dx > mesh['dx'] and force_finer:
+        dx /= np.ceil(dx / mesh['dx'])
+
+    if dy > mesh['dy'] and force_finer:
+        dy /= np.ceil(dy / mesh['dy'])
+
+    print(f"new mesh resolution (dx, dy): {dx, dy}")
+    mesh.update({'dx':dx})
+    mesh.update({'dy':dy})

@@ -18,6 +18,8 @@ def simulate_2d(inputs:dict) -> None:
                  m['dy'])**2 / np.max(m['diffusivity']) for m in inputs['meshes'].values()))
 
         t_now += dt
+        print("                                     ", end='\r')
+        print(f"t = {t_now:0.3f} s, dt = {dt:0.6f} s", end='\r')
         store = t_now - t[-1] >= inputs['dt_storage']
         if store:
             t = np.hstack((t, t_now))
@@ -126,7 +128,7 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float=0.5) -> np.ndarray
                     u_mid[i, s:e+1] = edge_state['values']
                 else:
                     d_edge = sum(edge['direction'])
-                    u_mid[i, s:e+1] = u_in[i+d_edge, s:e+1] - dy*edge_state['values']*d_edge
+                    u_mid[i, s:e+1] = u_in[i+d_edge, s:e+1] - dx*edge_state['values']*d_edge
 
                 continue
 
