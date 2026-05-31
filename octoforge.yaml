@@ -1,6 +1,6 @@
 # Simulation file for OctoForge Chamber
 
-tf: 1200.0
+tf: 100.0
 dt_storage: 5
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
@@ -83,10 +83,7 @@ meshes:
 
     - {edge: 19, mode: 'neumann', value: 0.0}
 
-    
-
-
-
+  
   outer_panel:
     dx: 0.001
     dy: 0.01

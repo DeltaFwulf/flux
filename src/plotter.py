@@ -1,5 +1,6 @@
 """Contains functions for plotting results."""
 
+from os.path import join, exists
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -100,8 +101,14 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
     fig.set_tight_layout(True)
 
     interval = 50 if kwargs.get('interval') is not float else kwargs['interval']
-    _ = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
-    plt.show()
+    ani = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
+
+    saved = False
+    if kwargs.get('save'):
+        saved = save_figure(ani)
+
+    if not saved:
+        plt.show()
 
 
 
@@ -116,8 +123,9 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
     norm = plt.Normalize(u_min, u_max)
 
-    fig, ax_transient = plt.subplots()
-    # fig.set_tight_layout(True)
+    plt.style.use('dark_background')
+    fig, ax_transient = plt.subplots(layout='compressed')
+    #fig.set_facecolor('midnightblue')
 
     xm = {}
     ym = {}
@@ -157,5 +165,45 @@ def plot2d_flat(results:dict, **kwargs) -> None:
     fig.colorbar(mappable=pcm).set_label("Temperature (K)")
 
     interval = 50 if kwargs.get('interval') is not float else kwargs['interval']
-    _ = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
-    plt.show()
+    ani = animation.FuncAnimation(fig, update, frames=t.size, interval=interval, blit=False)
+
+    saved = False
+    if kwargs.get('save'):
+        saved = save_figure(ani)
+
+    if not saved:
+        plt.show()
+
+
+
+def save_figure(ani) -> bool:
+    """Saves an animation as a GIF.
+
+    The user gives the containing folder absolute path, and the
+    filename without the .gif extension.
+
+    The function returns True if successful, else False.
+    """
+
+    while True:
+        save_dir = input("Please specify containing directory: ")
+
+        if not exists(save_dir):
+            response = input(f"{save_dir} does not exist, try again? (y/n): ")
+            if response.casefold() == 'n':
+                print("save cancelled")
+                return False
+
+        else:
+            break
+
+    filename = input("Please give filename (without extension): ")
+    path = join(save_dir, filename + '.gif')
+
+    if exists(path) and input("A file already exists with this name, overwrite? (y/n): ").casefold() == 'n':
+        print("save cancelled")
+        return False
+
+    ani.save(path, writer="pillow")
+    print(f"Animation saved to: {path}")
+    return True
