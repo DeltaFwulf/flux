@@ -67,9 +67,6 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
                             alpha=1.0,
                             linewidth=0.5)
 
-            # ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
-            #            zdir='z', offset=u_min, cmap='coolwarm')
-
             ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
                        zdir='x', offset=min(m['x']) - side_offset, cmap='coolwarm')
 
@@ -111,18 +108,16 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 def plot2d_flat(results:dict, **kwargs) -> None:
     """Plots transient mesh temperatures as pcolormesh, with mesh outlines."""
 
-    # TODO: make handles for pcolormesh values, so that axis doesn't have to be cleared
-    #       every frame
-
     meshes = results['meshes']
     t = results['t']
 
     u_min = min(np.min(m['u']) for m in meshes.values())
     u_max = max(np.max(m['u']) for m in meshes.values())
+
     norm = plt.Normalize(u_min, u_max)
 
     fig, ax_transient = plt.subplots()
-    fig.set_tight_layout(True)
+    # fig.set_tight_layout(True)
 
     xm = {}
     ym = {}
@@ -146,9 +141,9 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
             plot_mesh(ax_transient, xm[k], ym[k], m['u'][:,:,frame].transpose())
 
-            for line in m['lines']:
-                ax_transient.plot(np.array([line[0][0], line[1][0]])*m['dx'],
-                                  np.array([line[0][1], line[1][1]])*m['dy'],
+            for li in m['line_indices']:
+                ax_transient.plot(np.array([li[0][0], li[1][0]])*m['dx'],
+                                  np.array([li[0][1], li[1][1]])*m['dy'],
                                   linestyle='-',
                                   color=m['material']['colour'])
 

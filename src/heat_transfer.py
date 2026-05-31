@@ -18,8 +18,18 @@ def conduction(edge:dict, link:dict) -> np.ndarray:
 
 def radiation(edge:dict, link:dict) -> np.ndarray:
     """Calculates thermal flux due to radiation between edge and link object"""
-    q = 5.67e-8*((2*edge['emissivity'] - 1)*link['u4_mean'] -\
-                link['emissivity']*edge['u']**4)
+
+    # TODO: add cases to get a better flux estimate (grey body with view factor)
+
+    sb = 5.67e-8
+    q = sb*(link['u4_mean'] - edge['u']**4) / (1 / link['emissivity'] + 1 / edge['emissivity'] - 1)
+
+    # under relax flux to prevent oscillation
+    k_relax = edge['k_bar']*(link['u4_mean']**0.25 - edge['u_in']) / (q*edge['hn'])
+    q *= np.minimum(np.ones_like(q, float), k_relax)
+
+    # if np.any(k_relax < 1.0):
+    #     print("under-relaxing radiative flux")
 
     return q
 
@@ -28,8 +38,7 @@ def radiation(edge:dict, link:dict) -> np.ndarray:
 def convection(edge:dict, link:dict) -> np.ndarray:
     """Calculates thermal flux due to convection, with different cases."""
 
-    # TODO: create fluid in each case, they have different reference temps
-    # TODO: flip original sign of du, so that q is positive hk / l
+    # FIXME: if du == 0, do not fail
 
     u_film = 0.5*(link['temperature'] + np.mean(edge['u']))
     beta = 1 / (u_film if link['phase'] != 'gas' else link['temperature'])
@@ -62,6 +71,9 @@ def convection(edge:dict, link:dict) -> np.ndarray:
         # using the blending formula (Raithby and Hollands)
         l_star = np.sum(edge['areas']) / edge['perimeter']
         rayleigh = 9.81*beta*abs(np.mean(du))*l_star**3 / (fluid['kinematic_viscosity']*alpha)
+
+        if rayleigh == 0:
+            return np.zeros_like(du, float)
 
         nu_turb = 0.14*rayleigh**(1 / 3) *(1 + 0.0107*prandtl) / (1 + 0.01*prandtl)
         nu_lam = 0.56*rayleigh**0.25 / ((1 + 0.492 / prandtl)**(9 / 16))**(4 / 9)

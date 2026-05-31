@@ -107,6 +107,11 @@ def get_link_data(cfg:dict, edge:dict, bc:dict) -> dict:
     if cfg['environment'].get(name) is None and '/' not in name:
         raise ValueError
 
+    if '/' not in name and mode == 'radiation':
+        link_obj = deepcopy(cfg['environment'].get(name))
+        link_obj.update({'u4_mean':link_obj['temperature']**4})
+        return link_obj
+
     if '/' not in name:
         return cfg['environment'].get(name)
 

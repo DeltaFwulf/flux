@@ -1,57 +1,129 @@
-# Cross sectional view of the OctoForge chamber. Heating elements radiate to the wall and chamber, which re-radiates to the chamber.
-# Heat is lost through the side via natural convection
+# Simulation file for OctoForge Chamber
 
-tf: 1000.0
-dt_storage: 10.0
+tf: 1200.0
+dt_storage: 5
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
+force_finer: True
 
 meshes:
 
-  mesh_a:
-    dx: 0.01
-    dy: 0.01
-    u0: 500.0
-    material: 'stainless_steel'
-    curvature: 0
-    depth: 0.1
+  firebrick:
+    dx: 0.005
+    dy: 0.005
+    u0: 288.0
+    material: 'IN_26_firebrick'
+    curvature: 1
 
     lines:
-    - [[0.0, 0.1], [0.2, 0.1]]
-    - [[0.2, 0.1], [0.2, 0.2]]
-    - [[0.2, 0.2], [0.0, 0.2]]
-    - [[0.0, 0.2], [0.0, 0.1]]
+    - [[0.035, 0.0], [0.111, 0.0]]
+    - [[0.111, 0.0], [0.111, 0.15]]
+    - [[0.111, 0.15], [0.035, 0.15]]
     
-    boundary_conditions:
-    - {edge: 0, mode: 'conduction', link: 'mesh_b/2'}
-    - {edge: 1, mode: 'convection', link: 'ambient_air'}
-    - {edge: 2, mode: 'neumann', value: 0.0}
-    - {edge: 3, mode: 'neumann', value: 0.0}
+    # notch 0
+    - [[0.035, 0.15], [0.035, 0.13]]
+    - [[0.035, 0.13], [0.045, 0.13]]
+    - [[0.045, 0.13], [0.045, 0.12]]
+    - [[0.045, 0.12], [0.035, 0.12]]
 
-  mesh_b:
-    dx: 0.01
-    dy: 0.01
-    u0: 600
-    material: 'stainless_steel'
-    curvature: 0
-    depth: 0.1
+    - [[0.035, 0.12], [0.035, 0.10]]
 
-    lines:
-    - [[0.0, 0.0], [0.2, 0.0]]
-    - [[0.2, 0.0], [0.2, 0.1]]
-    - [[0.2, 0.1], [0.0, 0.1]]
-    - [[0.0, 0.1], [0.0, 0.0]]
+    # notch 1
+    - [[0.035, 0.10], [0.045, 0.10]]
+    - [[0.045, 0.10], [0.045, 0.09]]
+    - [[0.045, 0.09], [0.035, 0.09]]
+
+    - [[0.035, 0.09], [0.035, 0.07]]
+    
+    # notch 2
+    - [[0.035, 0.07], [0.045, 0.07]]
+    - [[0.045, 0.07], [0.045, 0.06]]
+    - [[0.045, 0.06], [0.035, 0.06]]
+    
+    - [[0.035, 0.06], [0.035, 0.04]]
+
+    # notch 3
+    - [[0.035, 0.04], [0.045, 0.04]]
+    - [[0.045, 0.04], [0.045, 0.03]]
+    - [[0.045, 0.03], [0.035, 0.03]]
+
+    - [[0.035, 0.03], [0.035, 0.0]]
+
+    # We assume that the notch faces are irradiated by the heating elements,
+    # while the inner faces are irradiated by the crucible. (this is not accurate, but 
+    # we need a better radiation model to out do this for now).
 
     boundary_conditions:
     - {edge: 0, mode: 'neumann', value: 0.0}
-    - {edge: 1, mode: 'convection', link: 'ambient_air'}
-    - {edge: 2, mode: 'conduction', link: 'mesh_a/0'}
+    - {edge: 1, mode: 'conduction', link: 'outer_panel/3'}
+    - {edge: 2, mode: 'neumann', value: 0.0}
     - {edge: 3, mode: 'neumann', value: 0.0}
+    
+    - {edge: 4, mode: 'radiation', link: 'heating_element'}
+    - {edge: 5, mode: 'radiation', link: 'heating_element'}
+    - {edge: 6, mode: 'radiation', link: 'heating_element'}
+    
+    - {edge: 7, mode: 'neumann', value: 0.0}
+
+    - {edge: 8, mode: 'radiation', link: 'heating_element'}
+    - {edge: 9, mode: 'radiation', link: 'heating_element'}
+    - {edge: 10, mode: 'radiation', link: 'heating_element'}
+
+    - {edge: 11, mode: 'neumann', value: 0.0}
+
+    - {edge: 12, mode: 'radiation', link: 'heating_element'}
+    - {edge: 13, mode: 'radiation', link: 'heating_element'}
+    - {edge: 14, mode: 'radiation', link: 'heating_element'}
+
+    - {edge: 15, mode: 'neumann', value: 0.0}
+
+    - {edge: 16, mode: 'radiation', link: 'heating_element'}
+    - {edge: 17, mode: 'radiation', link: 'heating_element'}
+    - {edge: 18, mode: 'radiation', link: 'heating_element'}
+
+    - {edge: 19, mode: 'neumann', value: 0.0}
+
+    
+
+
+
+  outer_panel:
+    dx: 0.001
+    dy: 0.01
+    u0: 288.0
+    material: 'stainless_steel'
+    curvature: 1
+
+    lines:
+    - [[0.111, 0.0], [0.113, 0.0]]
+    - [[0.113, 0.0], [0.113, 0.15]]
+    - [[0.113, 0.15], [0.111, 0.15]]
+    - [[0.111, 0.15], [0.111, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'convection', link: 'ambient_air'}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'convection', link: 'ambient_air'}
+    - {edge: 3, mode: 'conduction', link: 'firebrick/1'}
+
 
 environment:
   
   ambient_air:
-    name: 'humid_air'
+    name: 'Air'
     temperature: 288.0
     pressure: 101325
     phase: 'gas'
+    velocity: 0.0
+
+  heating_element:
+    name: 'heating element'
+    temperature: 1400.0
+    emissivity: 0.8
+
+  crucible:
+    name: 'crucible'
+    temperature: 288.0
+    material: 'graphite'
+    mass: 1.0
+    area: 0.027 # approximately, including base and fake top
