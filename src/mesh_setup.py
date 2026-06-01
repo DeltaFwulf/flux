@@ -20,7 +20,7 @@ from math import copysign, pi
 import numpy as np
 import yaml
 
-from util import update_properties
+from util import update_properties, calc_bc_relations
 
 
 
@@ -241,20 +241,6 @@ def find_edges(mesh:dict) -> list:
     # sort edges by line index
     edges = [edges[p] for p in np.argsort([edge['line_index'] for edge in edges])]
     mesh.update({'edges':edges})
-
-
-
-def calc_bc_relations(mesh:dict):
-    """Returns a list of boundary condition indices relevant to each edge in a mesh."""
-
-    edge_bcs = []
-    for l in range(len(mesh['edges'])):
-
-        # iterate through all boundary conditions, add relevant entries to list
-        relevant = [i for i, bc in enumerate(mesh['boundary_conditions']) if bc['edge'] == l]
-        edge_bcs.append(relevant)
-
-    mesh.update({'edge_bcs':edge_bcs})
 
 
 

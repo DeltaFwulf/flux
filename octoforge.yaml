@@ -124,6 +124,26 @@ meshes:
     - {edge: 3, mode: 'conduction', link: 'rockwool_blanket/1'}
 
 
+lumped_capacitors:
+
+  crucible:
+    u0: 288.0
+    material: 'graphite'
+    curvature: 1
+
+    lines:
+    - [[0.0, 0.0], [0.025, 0.0]]
+    - [[0.025, 0.0], [0.025, 0.15]]
+    - [[0.025, 0.15], [0.0, 0.15]]
+    - [[0.0, 0.15], [0.0, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'radiation', link: 'firebrick/3'}
+    - {edge: 2, mode: 'neumann', value: 0.0}
+    - {edge: 3, mode: 'neumann', value: 0.0}
+
+
 environment:
   
   ambient_air:
