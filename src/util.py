@@ -7,6 +7,119 @@ from heat_transfer import conduction, convection, radiation
 
 
 
+def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
+    """Updates the state of a single mesh over a single timestep via the ADI method."""
+
+    i_arr = mesh['i_arr']
+    j_arr = mesh['j_arr']
+    dx = mesh['dx']
+    dy = mesh['dy']
+    alpha = mesh['diffusivity']
+
+    # calculate mesh coefficients
+    bxx_c = alpha*dt*(1 - theta) / dx**2
+    bxx_n = alpha*dt*theta / dx**2
+    byy_c = 0 if curv > 1 else (alpha*(1 - theta)*dt / dy**2)
+    byy_n = 0 if curv > 1 else (alpha*theta*dt / dy**2)
+    bx_c = curv*alpha*(1 - theta)*dt / (2*dx)
+    bx_n = curv*alpha*theta*dt / (2*dx)
+
+    u_in = mesh['u_last']
+    u_mid = np.zeros_like(u_in, float)
+
+    # row slices (across x)
+    for j in range(j_arr.size):
+        for reg in mesh['regions_x'][j]:
+
+            s = np.where(i_arr == reg['bounds'][0])[0][0]
+            e = np.where(i_arr == reg['bounds'][1])[0][0]
+
+            if reg['type'] == 'edge':
+
+                edge = mesh['edges'][reg['line']]
+                edge_state = mesh['edge_states'][reg['line']]
+
+                if edge_state['type'] == 'direct':
+                    u_mid[s:e+1, j] = edge_state['values']
+                else:
+                    d_edge = sum(edge['direction'])
+                    u_mid[s:e+1, j] = u_in[s:e+1, j+d_edge] - dy*edge_state['values']*d_edge
+
+                continue
+
+            line_s = reg['line_s']
+            line_e = reg['line_e']
+            type_s = mesh['edge_states'][line_s]['type']
+            type_e = mesh['edge_states'][line_e]['type']
+            val_s = mesh['edge_states'][line_s]['values'][j - mesh['edges'][line_s]['indices'][0]]
+            val_e = mesh['edge_states'][line_e]['values'][j - mesh['edges'][line_e]['indices'][0]]
+
+            a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / (dx*i_arr[s+1:e]), 0.0 if\
+                        type_e == 'direct' else -1.0]
+
+            b = np.r_[1.0 if type_s == 'direct' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
+
+            c = np.r_[0.0 if type_s == 'direct' else 1.0, -bxx_n[s+2:e+1,j] -\
+                        bx_n[s+2:e+1,j] / (dx*i_arr[s+1:e]), 0.0]
+
+            d = np.r_[val_s if type_s == 'direct' else dx*val_s,\
+
+                        byy_c[s+1:e,j-1]*u_in[s+1:e,j-1] +\
+                        (1 - 2*byy_c[s+1:e,j])*u_in[s+1:e,j] +\
+                        byy_c[s+1:e,j+1]*u_in[s+1:e,j+1],\
+
+                        val_e if type_e == 'direct' else dx*val_e]
+
+            u_mid[s:e+1,j] = tdma(u_in[s:e+1,j], a, b, c, d)
+
+    # column slices (across y)
+    u_out = u_mid
+    for i in range(i_arr.size):
+        for reg in mesh['regions_y'][i]:
+
+            s = np.where(j_arr == reg['bounds'][0])[0][0]
+            e = np.where(j_arr == reg['bounds'][1])[0][0]
+
+            if reg['type'] == 'edge':
+
+                edge = mesh['edges'][reg['line']]
+                edge_state = mesh['edge_states'][reg['line']]
+
+                if edge_state['type'] == 'direct':
+                    u_mid[i, s:e+1] = edge_state['values']
+                else:
+                    d_edge = sum(edge['direction'])
+                    u_mid[i, s:e+1] = u_in[i+d_edge, s:e+1] - dx*edge_state['values']*d_edge
+
+                continue
+
+            line_s = reg['line_s']
+            line_e = reg['line_e']
+            type_s = mesh['edge_states'][line_s]['type']
+            type_e = mesh['edge_states'][line_e]['type']
+            val_s = mesh['edge_states'][line_s]['values'][i - mesh['edges'][line_s]['indices'][0]]
+            val_e = mesh['edge_states'][line_e]['values'][i - mesh['edges'][line_e]['indices'][0]]
+
+            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if type_e == 'direct' else -1.0]
+
+            b = np.r_[1.0 if type_s == 'direct' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
+
+            c = np.r_[0.0 if type_s == 'direct' else 1.0, -byy_n[i,s+2:e+1], 0.0]
+
+            d = np.r_[val_s if type_s == 'direct' else dy*val_s,\
+
+                (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / (dx*i_arr[i]))*u_mid[i+1,s+1:e] +\
+                (1 - 2*bxx_c[i,s+1:e])*u_mid[i,s+1:e] +\
+                (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / (dx*i_arr[i]))*u_mid[i-1,s+1:e],
+
+                val_e if type_e == 'direct' else dy*val_e]
+
+            u_out[i,s:e+1] = tdma(u_mid[i,s:e+1], a, b, c, d)
+
+    return u_out
+
+
+
 def tdma(x, a, b, c, d) -> np.ndarray:
     """Solves for x given a tridiagonal matrix, following Thomas' Algorithm."""
 
@@ -157,7 +270,7 @@ def get_link_data(cfg:dict, edge:dict, bc:dict) -> dict:
 
 
 def update_properties(mesh:dict) -> None:
-    """Updates the mesh's material properties (k, cp, rho) given temperature."""
+    """Updates a solid object's material properties (k, cp, rho) given a temperature."""
 
     u = mesh['u_last']
     mat = mesh['material']

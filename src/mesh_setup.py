@@ -1,11 +1,21 @@
-"""Sets up objects to be simulated in mesh_2d.
+"""Setup script for 2D mesh dictionaries.
 
-Add functions here when they are to be run once per mesh at the
-start of the simulation and not again.
+This contains all the functions required to build a useable mesh
+dictionary in flux.
+
+Meshes contain:
+- edges
+- regions
+- resolutions (x, y)
+- boundary conditions
+- curvature
+- material
+
 """
 
 from os import getcwd
 from os.path import join
+from copy import deepcopy
 from math import copysign, pi
 import numpy as np
 import yaml
@@ -14,85 +24,63 @@ from util import update_properties
 
 
 
-def setup_2d(defname:str):
-    """Sets up simulation data for the mesh_2d script."""
-
-    sim_inputs = {}
-
-    # load runtime settings and mesh definitions
-    with open(join(getcwd(), defname), 'r', encoding='utf-8') as cfg:
-        cfg = yaml.load(cfg, Loader=yaml.SafeLoader)
+def init_mesh(mesh_def:dict, force_finer:bool):
+    """Prepares a mesh dictionary for simulation."""
 
     with open(join(getcwd(), 'src', 'data', 'materials.yaml'), encoding='utf-8') as f:
         materials = yaml.load(stream=f, Loader=yaml.SafeLoader)
 
-    # Runtime global settings
-    sim_inputs.update({'tf':cfg['tf']})
-    sim_inputs.update({'dt_storage':cfg['dt_storage']})
-    sim_inputs.update({'theta':cfg['theta']})
-    sim_inputs.update({'max_courant':cfg['max_courant']})
-    sim_inputs.update({'force_finer':cfg['force_finer']})
+    m = deepcopy(mesh_def)
 
-    # Meshes
-    meshes = {}
-    for key, m in cfg['meshes'].items():
+    z = 0
+    while z < 2:
+        # snap lines to the grid and convert to mesh indices
+        m['line_indices'] = [tuple((round(p[0] / m['dx']), round(p[1] / m['dy'])) for p in l)\
+                for l in m['lines']]
 
-        z = 0
-        while z < 2:
-            # snap lines to the grid and convert to mesh indices
-            m['line_indices'] = [tuple((round(p[0] / m['dx']), round(p[1] / m['dy'])) for p in l)\
-                    for l in m['lines']]
+        i_min = min(p[0] for l in m['line_indices'] for p in l)
+        i_max = max(p[0] for l in m['line_indices'] for p in l)
+        j_min = min(p[1] for l in m['line_indices'] for p in l)
+        j_max = max(p[1] for l in m['line_indices'] for p in l)
 
-            i_min = min(p[0] for l in m['line_indices'] for p in l)
-            i_max = max(p[0] for l in m['line_indices'] for p in l)
-            j_min = min(p[1] for l in m['line_indices'] for p in l)
-            j_max = max(p[1] for l in m['line_indices'] for p in l)
+        m.update({'i_arr':np.arange(i_min, i_max + 1, 1)})
+        m.update({'j_arr':np.arange(j_min, j_max + 1, 1)})
 
-            m.update({'i_arr':np.arange(i_min, i_max + 1, 1)})
-            m.update({'j_arr':np.arange(j_min, j_max + 1, 1)})
+        # get all x slice regions
+        m.update({'regions_x':[slice_regions(m, direction='x', n=j) for j in m['j_arr']]})
 
-            # get all x slice regions
-            m.update({'regions_x':[slice_regions(m, direction='x', n=j) for j in m['j_arr']]})
+        # get all y slice regions
+        m.update({'regions_y':[slice_regions(m, direction='y', n=i) for i in m['i_arr']]})
 
-            # get all y slice regions
-            m.update({'regions_y':[slice_regions(m, direction='y', n=i) for i in m['i_arr']]})
+        # rescale mesh
+        if z == 0:
+            fit_mesh_resolution(m, force_finer)
 
-            # rescale mesh
-            if z == 0:
-                fit_mesh_resolution(m, cfg['force_finer'])
+        z += 1
 
-            z += 1
+    mat = materials.get(m['material'])
+    if mat is None:
+        print(f"Material {m['material']} is not found at /src/data/materials.yaml.")
+        raise ValueError
 
-        mat = materials.get(m['material'])
-        if mat is None:
-            print(f"Material {m['material']} is not found at /src/data/materials.yaml.")
-            raise ValueError
+    m.update({'material':mat})
 
-        m.update({'material':mat})
+    find_edges(m)
+    calc_bc_relations(m)
+    mask_void_regions(m)
 
-        find_edges(m)
-        calc_bc_relations(m)
-        mask_void_regions(m)
+    m.update({'x':m['dx']*m['i_arr']})
+    m.update({'y':m['dy']*m['j_arr']})
 
-        m.update({'x':m['dx']*m['i_arr']})
-        m.update({'y':m['dy']*m['j_arr']})
+    # Meshes store 'u' for final results, u_latest for use in next timestep, u_last
+    # for reference by other meshes.
+    m.update({'u':np.zeros((m['i_arr'].size, m['j_arr'].size, 1), float) + m['u0']})
+    m.update({'u_latest':m['u'][:, :, -1]})
+    m.update({'u_last':m['u'][:, :, -1]})
 
-        # Meshes store 'u' for final results, u_latest for use in next timestep, u_last
-        # for reference by other meshes.
-        m.update({'u':np.zeros((m['i_arr'].size, m['j_arr'].size, 1), float) + m['u0']})
-        m.update({'u_latest':m['u'][:, :, -1]})
-        m.update({'u_last':m['u'][:, :, -1]})
+    update_properties(m)
 
-        update_properties(m)
-
-        meshes.update({key:m})
-
-    sim_inputs.update({'meshes':meshes})
-
-    # Environment
-    sim_inputs.update({'environment':cfg['environment']})
-
-    return sim_inputs
+    return m
 
 
 
