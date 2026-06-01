@@ -1,7 +1,7 @@
 # Simulation file for OctoForge Chamber
 
-tf: 100.0
-dt_storage: 5
+tf: 7200.0
+dt_storage: 36.0
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
 force_finer: True
@@ -55,7 +55,7 @@ meshes:
 
     boundary_conditions:
     - {edge: 0, mode: 'neumann', value: 0.0}
-    - {edge: 1, mode: 'conduction', link: 'outer_panel/3'}
+    - {edge: 1, mode: 'conduction', link: 'rockwool_blanket/3'}
     - {edge: 2, mode: 'neumann', value: 0.0}
     - {edge: 3, mode: 'neumann', value: 0.0}
     
@@ -84,24 +84,44 @@ meshes:
     - {edge: 19, mode: 'neumann', value: 0.0}
 
   
+  rockwool_blanket:
+    dx: 0.01
+    dy: 0.005
+    u0: 288.0
+    material: 'IN_26_firebrick'
+    curvature: 1
+
+    lines:
+    - [[0.111, 0.0], [0.211, 0.0]]
+    - [[0.211, 0.0], [0.211, 0.15]]
+    - [[0.211, 0.15], [0.111, 0.15]]
+    - [[0.111, 0.15], [0.111, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'conduction', link: 'outer_panel/3'}
+    - {edge: 2, mode: 'neumann', value: 0.0}
+    - {edge: 3, mode: 'conduction', link: 'firebrick/1'}
+
+  
   outer_panel:
     dx: 0.001
-    dy: 0.01
+    dy: 0.02
     u0: 288.0
     material: 'stainless_steel'
     curvature: 1
 
     lines:
-    - [[0.111, 0.0], [0.113, 0.0]]
-    - [[0.113, 0.0], [0.113, 0.15]]
-    - [[0.113, 0.15], [0.111, 0.15]]
-    - [[0.111, 0.15], [0.111, 0.0]]
+    - [[0.211, 0.0], [0.213, 0.0]]
+    - [[0.213, 0.0], [0.213, 0.15]]
+    - [[0.213, 0.15], [0.211, 0.15]]
+    - [[0.211, 0.15], [0.211, 0.0]]
 
     boundary_conditions:
     - {edge: 0, mode: 'convection', link: 'ambient_air'}
     - {edge: 1, mode: 'convection', link: 'ambient_air'}
     - {edge: 2, mode: 'convection', link: 'ambient_air'}
-    - {edge: 3, mode: 'conduction', link: 'firebrick/1'}
+    - {edge: 3, mode: 'conduction', link: 'rockwool_blanket/1'}
 
 
 environment:

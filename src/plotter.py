@@ -61,15 +61,19 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
         ax.clear()
 
         for k, m in meshes.items():
-            ax.plot_surface(xm[k], ym[k], m['u'][:,:,frame].transpose(),
+
+            u_masked = np.ma.masked_where(m['mask'], m['u'][:,:,frame]).transpose()
+            ax.plot_surface(xm[k], ym[k], u_masked,
                             edgecolor=m['material']['colour'],
                             cmap='magma',
                             norm=norm,
                             alpha=1.0,
                             linewidth=0.5)
 
-            ax.contour(xm[k], ym[k], m['u'][:, :, frame].transpose(),\
-                       zdir='x', offset=min(m['x']) - side_offset, cmap='coolwarm')
+            ax.contour(xm[k], ym[k], u_masked,\
+                       zdir='x',
+                       offset=min(m['x']) - side_offset,
+                       cmap='coolwarm')
 
         ax.set_zlim(u_min, u_max)
         ax.set_aspect('equalxy')
@@ -115,21 +119,20 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 def plot2d_flat(results:dict, **kwargs) -> None:
     """Plots transient mesh temperatures as pcolormesh, with mesh outlines."""
 
-    meshes = results['meshes']
     t = results['t']
 
-    u_min = min(np.min(m['u']) for m in meshes.values())
-    u_max = max(np.max(m['u']) for m in meshes.values())
+    u_min = min(np.min(m['u']) for m in results['meshes'].values())
+    u_max = max(np.max(m['u']) for m in results['meshes'].values())
 
     norm = plt.Normalize(u_min, u_max)
 
     plt.style.use('dark_background')
     fig, ax_transient = plt.subplots(layout='compressed')
-    #fig.set_facecolor('midnightblue')
+
 
     xm = {}
     ym = {}
-    for k, m in meshes.items():
+    for k, m in results['meshes'].items():
         xk, yk = np.meshgrid(m['x'], m['y'])
         xm.update({k:xk})
         ym.update({k:yk})
@@ -145,9 +148,10 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
         ax_transient.clear()
 
-        for k, m in meshes.items():
+        for k, m in results['meshes'].items():
 
-            plot_mesh(ax_transient, xm[k], ym[k], m['u'][:,:,frame].transpose())
+            u_masked = np.ma.masked_where(m['mask'], m['u'][:,:,frame]).transpose()
+            plot_mesh(ax_transient, xm[k], ym[k], u_masked)
 
             for li in m['line_indices']:
                 ax_transient.plot(np.array([li[0][0], li[1][0]])*m['dx'],

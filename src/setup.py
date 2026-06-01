@@ -1,4 +1,8 @@
-"""Sets up objects to be simulated in mesh_2d."""
+"""Sets up objects to be simulated in mesh_2d.
+
+Add functions here when they are to be run once per mesh at the
+start of the simulation and not again.
+"""
 
 from os import getcwd
 from os.path import join
@@ -65,8 +69,10 @@ def setup_2d(defname:str):
             raise ValueError
 
         m.update({'material':mat})
+        
         find_edges(m)
         calc_bc_relations(m)
+        mask_void_regions(m)
 
         m.update({'x':m['dx']*m['i_arr']})
         m.update({'y':m['dy']*m['j_arr']})
@@ -181,7 +187,7 @@ def slice_regions(mesh:dict, direction:str, n:int) -> list[dict]:
 
             reg.update({'type':'internal', 'line_s':t_prev['line_index'], 'line_e':t['line_index']})
             regions.append(reg)
-            
+
     return regions
 
 
@@ -290,3 +296,23 @@ def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]
     print(f"new mesh resolution (dx, dy): {dx, dy}")
     mesh.update({'dx':dx})
     mesh.update({'dy':dy})
+
+
+
+def mask_void_regions(mesh:dict) -> np.ndarray:
+    """Masks a mesh's void regions so plotters ignore them.
+    
+    By scanning through all regions in one direction, the 'voids'
+    between different regions can be located and a mask array created
+    for plotters, so that meshes are plotted with clean boundaries.
+    """
+
+    mask = np.zeros((mesh['i_arr'].size, mesh['j_arr'].size,), bool)
+
+    # iterate through all x slices and locate all void regions
+    for j, row in enumerate(mesh['regions_x']):
+        for reg in row:
+            mask[:, j] = [not (reg['bounds'][0] <= i <= reg['bounds'][1]) for i in mesh['i_arr']]
+
+    # update the mesh's 'mask' term
+    mesh.update({'mask':mask})

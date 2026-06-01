@@ -28,9 +28,6 @@ def radiation(edge:dict, link:dict) -> np.ndarray:
     k_relax = edge['k_bar']*(link['u4_mean']**0.25 - edge['u_in']) / (q*edge['hn'])
     q *= np.minimum(np.ones_like(q, float), k_relax)
 
-    # if np.any(k_relax < 1.0):
-    #     print("under-relaxing radiative flux")
-
     return q
 
 
