@@ -1,7 +1,7 @@
 # Simulation file for OctoForge Chamber
 
-tf: 7200.0
-dt_storage: 36.0
+tf: 200.0
+dt_storage: 5.0
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
 force_finer: True

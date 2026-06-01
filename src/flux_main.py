@@ -10,8 +10,8 @@ def run_simulation(config:str):
 
     sim_inputs = setup_2d(config)
     results = simulate_2d(inputs=sim_inputs)
-    animate_temp_2d(results, save=True)
-    plot2d_flat(results, save=True)
+    animate_temp_2d(results, save=False)
+    #plot2d_flat(results, save=True)
 
 
 

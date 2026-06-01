@@ -69,7 +69,7 @@ def setup_2d(defname:str):
             raise ValueError
 
         m.update({'material':mat})
-        
+
         find_edges(m)
         calc_bc_relations(m)
         mask_void_regions(m)
@@ -210,7 +210,6 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'direction':(0, reg['direction'])})
                 edge.update({'hp':mesh['dx']})
                 edge.update({'hn':mesh['dy']})
-                edge.update({'emissivity':mesh['material']['emissivity']})
 
                 if mesh['curvature'] == 0:
                     areas = mesh['depth']*mesh['dx']*np.r_[1, 2*np.ones(e - s - 1, float), 1]
@@ -239,7 +238,6 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'direction':(reg['direction'], 0)})
                 edge.update({'hp':mesh['dy']})
                 edge.update({'hn':mesh['dx']})
-                edge.update({'emissivity':mesh['material']['emissivity']})
 
                 areas = np.zeros_like(edge['indices'])
                 if mesh['curvature'] == 0:
