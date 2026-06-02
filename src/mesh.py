@@ -20,11 +20,10 @@ from math import copysign, pi
 import numpy as np
 import yaml
 
-from util import update_properties, calc_bc_relations, get_link_data
+from util import update_properties, calc_bc_relations
 from heat_transfer import conduction, convection, radiation
 
 
-# TODO: preserve global x, y array values
 
 def init_mesh(mesh_def:dict, force_finer:bool):
     """Prepares a mesh dictionary for simulation."""
@@ -269,9 +268,6 @@ def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]
             if round(pt[1]) != pt[1]:
                 pow_y = max(pow_y, len(str(pt[1]).split(".")[1]))
 
-    # power_x = max(len(str(float(pt[0])).split(".")[1]) for line in mesh['lines'] for pt in line)
-    # power_y = max(len(str(float(pt[1])).split(".")[1]) for line in mesh['lines'] for pt in line)
-
     w_scaled_x = [round(w*10**pow_x) for w in widths_x]
     w_scaled_y = [round(w*10**pow_y) for w in widths_y]
 
@@ -452,6 +448,85 @@ def tdma(x, a, b, c, d) -> np.ndarray:
 
 
 
+def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
+    """Packs all required data for heat transfer calculation into a link object.
+    
+    Three types of object can be linked to:
+    - environment variables
+    - mesh edges
+    - lumped capacitor edges
+
+    The link is a string, either split into three (lc, mesh),
+    or just the name (environment)
+    """
+
+    mode = bc['mode']
+    split_link = bc['link'].split('/')
+
+    if len(split_link) == 1:
+        link_obj = deepcopy(cfg['environment'][split_link[0]]) | {'type':'environment'}
+        if mode == 'radiation':
+            link_obj.update({'u4_mean':link_obj['temperature']**4})
+
+    elif split_link[0] == 'meshes':
+        mesh = cfg['meshes'][split_link[1]]
+        link_obj = deepcopy(mesh['edges'][int(split_link[2])]) | {'type':'mesh_edge'}
+
+        link_obj.update({'hn':mesh['dx'] if link_obj['direction'][0] == 0 else mesh['dy']})
+        s, e, n = link_obj['indices']
+        u = mesh['u_last'][s:e+1, n] if link_obj['direction'][0] == 0 else\
+            mesh['u_last'][n, s:e+1].ravel()
+
+        link_obj.update({'u':u})
+
+        if mode == 'radiation':
+            u4_mean = np.sum(link_obj['areas']*u**4) / np.sum(link_obj['areas'])
+            link_obj.update({'u4_mean':u4_mean})
+            link_obj.update({'emissivity':mesh['material']['emissivity']})
+
+        elif mode == 'conduction':
+
+            u_in = (mesh['u_last'][s:e+1, n+sum(link_obj['direction'])] if\
+                    link_obj['direction'][0] == 0 else\
+                    mesh['u_last'][n+sum(link_obj['direction']), s:e+1]).ravel()
+
+            k = (mesh['k'][s:e+1, n] if link_obj['direction'][0] == 0 else\
+                mesh['k'][n, s:e+1]).ravel()
+
+            k_in = (mesh['k'][s:e+1, n+sum(link_obj['direction'])] if link_obj['direction'][0]\
+                == 0 else mesh['k'][n+sum(link_obj['direction']), s:e+1]).ravel()
+
+            k_bar = 0.5*(k + k_in)
+
+            s_edge, e_edge = edge['indices'][:2]
+            edge_pts = np.arange(0, e_edge - s_edge + 1) / (e_edge - s_edge)
+            link_pts = np.arange(0, e - s + 1) / (e - s)
+
+            # align values to edge nodes
+            u = np.interp(edge_pts, link_pts, u)
+            u_in = np.interp(edge_pts, link_pts, u_in)
+            k_bar = np.interp(edge_pts, link_pts, k_bar)
+
+            link_obj.update({'u':u, 'u_in':u_in, 'k_bar':k_bar})
+
+    elif split_link[1] == 'lumped_capacitors':
+
+        s_edge, e_edge = edge['indices'][:2]
+        lc = cfg['lumped_capacitors'][split_link[1]]
+        link_obj = deepcopy(lc['edges'][int(split_link[2])]) | {'type':'lc_edge'}
+        link_obj.update({'u':lc['u_last'] + np.zeros((e_edge - s_edge + 1), float)})
+
+        if mode == 'radiation':
+            link_obj.update({'u4_mean':lc['u_last']**4})
+            link_obj.update({'emissivity':lc['material']['emissivity']})
+
+    else:
+        raise ValueError
+
+    return link_obj
+
+
+
 def calc_edge_states(cfg:dict) -> None:
     """Updates all mesh edge state arrays in the simulation and calculates edge fluxes.
     
@@ -516,7 +591,7 @@ def calc_edge_states(cfg:dict) -> None:
 
                     case 'conduction':
                         state_type = 'direct'
-                        pair_link = get_link_data(cfg, edge, boundary_condition)
+                        pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         edge_state = conduction(edge_link, pair_link)
                         q = edge_state['q']
                         state_val = edge_state['u_int']
@@ -525,14 +600,14 @@ def calc_edge_states(cfg:dict) -> None:
 
                     case 'convection':
                         state_type = 'gradient'
-                        pair_link = get_link_data(cfg, edge, boundary_condition)
+                        pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         q = convection(edge_link, pair_link)
                         state_val -= sum(edge['direction'])*q / edge_link['k_bar']
                         flux += q
 
                     case 'radiation':
                         state_type = 'gradient'
-                        pair_link = get_link_data(cfg, edge, boundary_condition)
+                        pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         q = radiation(edge_link, pair_link)
                         state_val -= sum(edge['direction'])*q / edge_link['k_bar']
                         flux += q

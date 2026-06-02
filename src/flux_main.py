@@ -51,7 +51,7 @@ def run_simulation(config:str):
     lumped_capacitors = {}
     if cfg.get('lumped_capacitors') is not None:
         for key, lc in cfg['lumped_capacitors'].items():
-            lumped_capacitors.update({'key':init_lc(lc)})
+            lumped_capacitors.update({key:init_lc(lc)})
         config.update({'lumped_capacitors':lumped_capacitors})
 
     if cfg.get('environment') is not None:
@@ -93,7 +93,7 @@ def run_simulation(config:str):
             if store:
                 m['u'] = np.dstack((m['u'], m['u_latest']))
 
-                for e in range(len(m['edges'])):                    
+                for e in range(len(m['edges'])):
                     m['edge_fluxes'][e] = np.append(m['edge_fluxes'][e],m['edge_fluxes_latest'][e])
                     m['edge_powers'][e] = np.append(m['edge_powers'][e],m['edge_powers_latest'][e])
 
