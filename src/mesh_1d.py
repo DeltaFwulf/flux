@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from util import tdma
+from mesh import tdma
 from plotter import plot_temp_1d
 
 

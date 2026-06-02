@@ -6,13 +6,16 @@ import numpy as np
 from pyfluids import Fluid, FluidsList, Input, HumidAir, InputHumidAir
 
 
-def conduction(edge:dict, link:dict) -> np.ndarray:
-    """Calculates common interface temperature between conducting faces."""
+def conduction(edge:dict, link:dict) -> dict:
+    """Calculates common interface temperature between conducting faces and flux."""
 
     na = link['k_bar'] / link['hn']
     nb = edge['k_bar'] / edge['hn']
 
-    return (na*link['u_in'] + nb*edge['u_in']) / (na + nb)
+    u_int = (na*link['u_in'] + nb*edge['u_in']) / (na + nb)
+    q = nb*(u_int - edge['u_in'])
+
+    return {'q':q, 'u_int':u_int}
 
 
 

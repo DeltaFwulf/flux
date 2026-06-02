@@ -7,7 +7,7 @@ from util import get_material, update_properties, calc_bc_relations
 
 
 
-def init_lumped_capacitor(lc_def:dict) -> dict:
+def init_lc(lc_def:dict) -> dict:
     """Initialises a lumped capacitor for use in a simulation."""
 
     lc = deepcopy(lc_def)

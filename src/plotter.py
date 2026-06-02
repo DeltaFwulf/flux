@@ -179,6 +179,26 @@ def plot2d_flat(results:dict, **kwargs) -> None:
         plt.show()
 
 
+def plot_total_powers(results:dict):
+    """Temporary plotter for mesh total powers."""
+
+    fig, ax = plt.subplots()
+
+    for key, mesh in results['meshes'].items():
+
+        total_power = 0.0
+        for p in mesh['edge_powers']:
+            total_power += p
+
+        ax.plot(results['t'], total_power, '-', label=key)
+
+    ax.set_xlabel("Time, s")
+    ax.set_ylabel("Power, W")
+    ax.legend()
+    ax.grid(True)
+    plt.show()
+
+
 
 def save_figure(ani) -> bool:
     """Saves an animation as a GIF.

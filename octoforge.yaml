@@ -1,7 +1,7 @@
 # Simulation file for OctoForge Chamber
 
-tf: 200.0
-dt_storage: 5.0
+tf: 7200.0
+dt_storage: 36.0
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
 force_finer: True
@@ -9,6 +9,7 @@ force_finer: True
 meshes:
 
   firebrick:
+    label: 'firebrick'
     dx: 0.005
     dy: 0.005
     u0: 288.0
@@ -85,6 +86,7 @@ meshes:
 
   
   rockwool_blanket:
+    label: 'rockwool blanket'
     dx: 0.01
     dy: 0.005
     u0: 288.0
@@ -105,6 +107,7 @@ meshes:
 
   
   outer_panel:
+    label: 'steel outer panel'
     dx: 0.001
     dy: 0.02
     u0: 288.0
@@ -127,6 +130,7 @@ meshes:
 lumped_capacitors:
 
   crucible:
+    label: 'graphite crucible'
     u0: 288.0
     material: 'graphite'
     curvature: 1
