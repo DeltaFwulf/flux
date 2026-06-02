@@ -24,6 +24,7 @@ from util import update_properties, calc_bc_relations, get_link_data
 from heat_transfer import conduction, convection, radiation
 
 
+# TODO: preserve global x, y array values
 
 def init_mesh(mesh_def:dict, force_finer:bool):
     """Prepares a mesh dictionary for simulation."""
@@ -33,11 +34,15 @@ def init_mesh(mesh_def:dict, force_finer:bool):
 
     m = deepcopy(mesh_def)
 
+    x_min = min(pt[0] for line in m['lines'] for pt in line)
+    y_min = min(pt[1] for line in m['lines'] for pt in line)
+
     z = 0
     while z < 2:
-        # snap lines to the grid and convert to mesh indices
-        m['line_indices'] = [tuple((round(p[0] / m['dx']), round(p[1] / m['dy'])) for p in l)\
-                for l in m['lines']]
+        # mesh indices for line points
+        m['line_indices'] = [tuple((round((p[0] - x_min) / m['dx']),
+                                    round((p[1] - y_min) / m['dy']))
+                             for p in l) for l in m['lines']]
 
         i_min = min(p[0] for l in m['line_indices'] for p in l)
         i_max = max(p[0] for l in m['line_indices'] for p in l)
@@ -69,9 +74,9 @@ def init_mesh(mesh_def:dict, force_finer:bool):
     find_edges(m)
     calc_bc_relations(m)
     mask_void_regions(m)
-    
-    m.update({'x':m['dx']*m['i_arr']})
-    m.update({'y':m['dy']*m['j_arr']})
+
+    m.update({'x':x_min + m['dx']*m['i_arr']})
+    m.update({'y':y_min + m['dy']*m['j_arr']})
 
     # Meshes store 'u' for final results, u_latest for use in next timestep, u_last
     # for reference by other meshes.

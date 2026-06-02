@@ -108,7 +108,7 @@ def run_simulation(config:str):
     results.update({'t':t})
 
     # plotting / rendering
-    animate_temp_2d(results, save=False)
+    animate_temp_2d(results, save=True)
     plot_total_powers(results)
 
 
