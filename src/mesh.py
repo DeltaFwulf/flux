@@ -20,7 +20,7 @@ from math import copysign, pi
 import numpy as np
 import yaml
 
-from .util import update_properties, calc_bc_relations
+from .util import update_properties, calc_bc_relations, get_decimal_resolution
 from .heat_transfer import conduction, convection, radiation
 
 
@@ -63,8 +63,10 @@ def init_mesh(mesh_def:dict, force_finer:bool):
 
         z += 1
 
-    m.update({'x':x_min + m['dx']*m['i_arr']})
-    m.update({'y':y_min + m['dy']*m['j_arr']})
+    x_res = max(get_decimal_resolution(m['dx']), get_decimal_resolution(x_min))
+    y_res = max(get_decimal_resolution(m['dy']), get_decimal_resolution(y_min))
+    m.update({'x':np.round(x_min + m['dx']*m['i_arr'], x_res)})
+    m.update({'y':np.round(y_min + m['dy']*m['j_arr'], y_res)})
 
     mat = materials.get(m['material'])
     if mat is None:
@@ -171,15 +173,17 @@ def slice_regions(mesh:dict, direction:str, n:int) -> list[dict]:
 
         # edge region
         if is_edge:
-            reg.update({'length':abs(mesh['lines'][l][1][a] - mesh['lines'][l][0][a])})
+            res = max(get_decimal_resolution(pt[a]) for pt in mesh['lines'][l])
+            reg.update({'length':round(abs(mesh['lines'][l][1][a] - mesh['lines'][l][0][a]), res)})
             reg.update({'type':'edge', 'direction':-t['normal']*t['parallel'], 'line':l})
             regions.append(reg)
 
         # internal region
         elif t['parallel'] == -1:
-            reg.update({'length':abs(mesh['lines'][t['line_index']][0][a] -
-                                 mesh['lines'][t_prev['line_index']][0][a])})
-
+            line_s = mesh['lines'][t_prev['line_index']]
+            line_e = mesh['lines'][t['line_index']]
+            res = max(get_decimal_resolution(pt) for pt in (line_s[0][a], line_e[0][a]))
+            reg.update({'length':round(abs(line_e[0][a] - line_s[0][a]), res)})
             reg.update({'type':'internal', 'line_s':t_prev['line_index'], 'line_e':t['line_index']})
             regions.append(reg)
 
@@ -261,15 +265,8 @@ def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]
     widths_y = [reg['length'] for slc in mesh['regions_y'] for reg in slc]
 
     # calculate scaling order of magnitudes, x and y
-    pow_x = 0
-    pow_y = 0
-    for line in mesh['lines']:
-        for pt in line:
-            if round(pt[0]) != pt[0]:
-                pow_x = max(pow_x, len(str(pt[0]).split(".")[1]))
-
-            if round(pt[1]) != pt[1]:
-                pow_y = max(pow_y, len(str(pt[1]).split(".")[1]))
+    pow_x = max(get_decimal_resolution(pt[0]) for line in mesh['lines'] for pt in line)
+    pow_y = max(get_decimal_resolution(pt[1]) for line in mesh['lines'] for pt in line)
 
     w_scaled_x = [round(w*10**pow_x) for w in widths_x]
     w_scaled_y = [round(w*10**pow_y) for w in widths_y]
@@ -277,11 +274,11 @@ def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]
     dx = float(np.gcd.reduce(w_scaled_x)) / 10**pow_x
     dy = float(np.gcd.reduce(w_scaled_y)) / 10**pow_y
 
-    if dx > mesh['dx'] and force_finer:
-        dx /= np.ceil(dx / mesh['dx'])
+    while dx > mesh['dx'] and force_finer:
+        dx /= 2
 
-    if dy > mesh['dy'] and force_finer:
-        dy /= np.ceil(dy / mesh['dy'])
+    while dy > mesh['dy'] and force_finer:
+        dy /= 2
 
     print(f"{mesh['label']}, new resolution (dx, dy): {dx, dy}")
     mesh.update({'dx':dx})
@@ -627,7 +624,10 @@ def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0
     s = min(bounds[0], bounds[1])
     e = max(bounds[0], bounds[1])
 
-    p = np.arange(s, e + h, h)
+    res = max(get_decimal_resolution(n) for n in (s, e, h))
+    p = np.round(np.arange(s, e + h, h), res)
+    if p[-1] > e:
+        p = np.delete(p, -1)
 
     # planar
     if curvature == 0:

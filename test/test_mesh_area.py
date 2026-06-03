@@ -115,7 +115,3 @@ class MeshAreaTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             calc_areas(bounds, h, normal, curvature)
-
-
-
-unittest.main()

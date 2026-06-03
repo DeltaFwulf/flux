@@ -48,3 +48,13 @@ def calc_bc_relations(solid:dict):
         edge_bcs.append(relevant)
 
     solid.update({'edge_bcs':edge_bcs})
+
+
+
+def get_decimal_resolution(num) -> int:
+    """Returns the number of significant trailing digits in a number."""
+
+    if round(num) == num:
+        return 0
+
+    return len(str(num).split('.')[1])
