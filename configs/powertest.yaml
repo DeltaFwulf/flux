@@ -2,6 +2,7 @@
 
 tf: 50000.0
 dt_storage: 250.0
+dt_max: 250.0
 theta: 0.5
 max_courant: 0.5
 force_finer: True
@@ -25,7 +26,7 @@ meshes:
 
     boundary_conditions:
     - {edge: 0, mode: 'neumann', value: 0.0}
-    - {edge: 1, mode: 'conduction', link: 'block_b/3'}
+    - {edge: 1, mode: 'conduction', link: 'meshes/block_b/3'}
     - {edge: 2, mode: 'neumann', value: 0.0}
     - {edge: 3, mode: 'neumann', value: 0.0}
 
@@ -48,7 +49,7 @@ meshes:
     - {edge: 0, mode: 'neumann', value: 0.0}
     - {edge: 1, mode: 'neumann', value: 0.0}
     - {edge: 2, mode: 'neumann', value: 0.0}
-    - {edge: 3, mode: 'conduction', link: 'block_a/1'}
+    - {edge: 3, mode: 'conduction', link: 'meshes/block_a/1'}
 
 
 lumped_capacitors:

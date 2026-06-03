@@ -3,7 +3,7 @@
 from copy import deepcopy
 from math import pi, copysign
 
-from util import get_material, update_properties, calc_bc_relations
+from .util import get_material, update_properties, calc_bc_relations
 
 
 

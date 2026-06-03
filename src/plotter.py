@@ -196,6 +196,7 @@ def plot_total_powers(results:dict):
     ax.set_ylabel("Power, W")
     ax.legend()
     ax.grid(True)
+    fig.tight_layout()
     plt.show()
 
 

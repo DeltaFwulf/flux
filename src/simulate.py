@@ -5,10 +5,10 @@ from os.path import join
 import yaml
 import numpy as np
 
-from lumped_capacitor import init_lc
-from mesh import init_mesh, update_mesh, calc_edge_states
-from util import update_properties
-from plotter import animate_temp_2d, plot_total_powers
+from .lumped_capacitor import init_lc
+from .mesh import init_mesh, update_mesh, calc_edge_states
+from .util import update_properties
+from .plotter import animate_temp_2d, plot_total_powers
 
 
 
@@ -29,14 +29,19 @@ def run_simulation(config:str):
     """
 
     # load runtime settings and mesh definitions
-    with open(join(getcwd(), config), 'r', encoding='utf-8') as cfg:
+    with open(join(getcwd(), 'configs', config), 'r', encoding='utf-8') as cfg:
         cfg = yaml.load(cfg, Loader=yaml.SafeLoader)
 
     runtime = {}
     runtime.update({'tf':cfg['tf']})
     runtime.update({'dt_storage':cfg['dt_storage']})
+    runtime.update({'dt_max':cfg['dt_max']})
     runtime.update({'theta':cfg['theta']})
     runtime.update({'max_courant':cfg['max_courant']})
+
+    if runtime['dt_max'] > runtime['dt_storage']:
+        print("ensure that dt_max <= dt_storage")
+        return
 
     config = {'runtime':runtime}
 
@@ -54,6 +59,7 @@ def run_simulation(config:str):
             lumped_capacitors.update({key:init_lc(lc)})
         config.update({'lumped_capacitors':lumped_capacitors})
 
+    environment = {}
     if cfg.get('environment') is not None:
         environment = cfg['environment']
         config.update({'environment':environment})
@@ -68,7 +74,7 @@ def run_simulation(config:str):
     while t_now < runtime['tf']:
 
         # calculate timestep
-        dt = min(runtime['dt_storage'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
+        dt = min(runtime['dt_max'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
                  / np.max(m['diffusivity']) for m in meshes.values()))
 
         t_now += dt
@@ -110,6 +116,3 @@ def run_simulation(config:str):
     # plotting / rendering
     animate_temp_2d(results, save=True)
     plot_total_powers(results)
-
-
-run_simulation('octoforge.yaml')

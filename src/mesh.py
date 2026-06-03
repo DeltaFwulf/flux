@@ -20,8 +20,8 @@ from math import copysign, pi
 import numpy as np
 import yaml
 
-from util import update_properties, calc_bc_relations
-from heat_transfer import conduction, convection, radiation
+from .util import update_properties, calc_bc_relations
+from .heat_transfer import conduction, convection, radiation
 
 
 
@@ -63,6 +63,9 @@ def init_mesh(mesh_def:dict, force_finer:bool):
 
         z += 1
 
+    m.update({'x':x_min + m['dx']*m['i_arr']})
+    m.update({'y':y_min + m['dy']*m['j_arr']})
+
     mat = materials.get(m['material'])
     if mat is None:
         print(f"Material {m['material']} is not found at /src/data/materials.yaml.")
@@ -73,9 +76,6 @@ def init_mesh(mesh_def:dict, force_finer:bool):
     find_edges(m)
     calc_bc_relations(m)
     mask_void_regions(m)
-
-    m.update({'x':x_min + m['dx']*m['i_arr']})
-    m.update({'y':y_min + m['dy']*m['j_arr']})
 
     # Meshes store 'u' for final results, u_latest for use in next timestep, u_last
     # for reference by other meshes.
@@ -201,22 +201,22 @@ def find_edges(mesh:dict) -> list:
 
                 edge = {}
                 edge.update({'indices':(s, e, k)})  # start, end, normal
+                edge.update({'bounds':(mesh['x'][s], mesh['x'][e], mesh['y'][k])})
                 edge.update({'line_index': reg['line']})
                 edge.update({'direction':(0, reg['direction'])})
                 edge.update({'hp':mesh['dx']})
                 edge.update({'hn':mesh['dy']})
 
-                if mesh['curvature'] == 0:
-                    areas = mesh['depth']*mesh['dx']*np.r_[1, 2*np.ones(e - s - 1, float), 1]
-                    edge.update({'areas':areas})
-                    edge.update({'perimeter':2*(mesh['depth'] + mesh['dx']*(e - s))})
-                elif mesh['curvature'] == 1:
-                    r = mesh['dx']*np.arange(reg['bounds'][0], reg['bounds'][1] + 1)
-                    areas = pi*np.r_[((r[1] + r[0])**2 / 4 - r[0]**2),
-                                     ((r[2:]+r[1:-1])**2 - (r[1:-1] + r[:-2])**2) / 4,
-                                     (r[-1]**2 - (r[-1] + r[-2])**2 / 4)]
-                    edge.update({'areas':areas})
-                    edge.update({'perimeter':2*pi*(r[-1] + r[0])})
+                edge.update({'areas':calc_areas(edge['bounds'],
+                                                edge['hp'],
+                                                edge['direction'],
+                                                mesh['curvature'],
+                                                mesh.get('depth'))})
+
+                edge.update({'perimeter':calc_perimeter(edge['bounds'],
+                                           edge['direction'],
+                                           mesh['curvature'],
+                                           mesh.get('depth'))})
 
                 edges.append(edge)
 
@@ -228,20 +228,23 @@ def find_edges(mesh:dict) -> list:
                 e = int(np.where(mesh['j_arr'] == reg['bounds'][1])[0])
 
                 edge = {}
-                edge.update({'indices': (s, e, k)})
+                edge.update({'indices':(s, e, k)})
+                edge.update({'bounds':(mesh['y'][s], mesh['y'][e], mesh['x'][k])})
                 edge.update({'line_index':reg['line']})
                 edge.update({'direction':(reg['direction'], 0)})
                 edge.update({'hp':mesh['dy']})
                 edge.update({'hn':mesh['dx']})
 
-                areas = np.zeros_like(edge['indices'])
-                if mesh['curvature'] == 0:
-                    areas = mesh['depth']*mesh['dy']*np.r_[1, 2*np.ones(e - s - 1, float), 1]
-                    edge.update({'areas':areas})
-                elif mesh['curvature'] == 1:
-                    r = mesh['dx']*mesh['i_arr'][k]
-                    areas = 2*pi*r*mesh['dy']*np.r_[1, 2*np.ones(e - s - 1, float), 1]
-                    edge.update({'areas':areas})
+                edge.update({'areas':calc_areas(edge['bounds'],
+                                                edge['hp'],
+                                                edge['direction'],
+                                                mesh['curvature'],
+                                                mesh.get('depth'))})
+
+                edge.update({'perimeter':calc_perimeter(edge['bounds'],
+                                           edge['direction'],
+                                           mesh['curvature'],
+                                           mesh.get('depth'))})
 
                 edges.append(edge)
 
@@ -283,11 +286,6 @@ def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]
     print(f"{mesh['label']}, new resolution (dx, dy): {dx, dy}")
     mesh.update({'dx':dx})
     mesh.update({'dy':dy})
-
-
-
-def calc_scaling_power(num) -> int:
-    """Calculates the order of magnitude required to make an integer."""
 
 
 
@@ -619,3 +617,59 @@ def calc_edge_states(cfg:dict) -> None:
         mesh.update({'edge_states':edge_states})
         mesh.update({'edge_fluxes_latest':fluxes})
         mesh.update({'edge_powers_latest':powers})
+
+
+
+def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0.0) -> np.ndarray:
+    """Calculates the surface area of mesh edge face elements."""
+
+    # arrange into ascending order edge
+    s = min(bounds[0], bounds[1])
+    e = max(bounds[0], bounds[1])
+
+    p = np.arange(s, e + h, h)
+
+    # planar
+    if curvature == 0:
+        areas = h*depth*np.r_[0.5, np.ones((p.size - 2), float), 0.5]
+
+    # curved, horizontal
+    elif normal[0] == 0:
+        if s < 0:
+            raise ValueError
+
+        areas = pi*np.ones_like(p)
+        half_out = p + 0.5*h
+
+        areas[0] *= half_out[0]**2 - p[0]**2
+        areas[-1] *= p[-1]**2 - half_out[-2]**2
+        areas[1:-1] *= np.abs(half_out[1:-1]**2 - half_out[:-2]**2)
+
+    # curved, vertical
+    else:
+        if bounds[2] < 0:
+            raise ValueError
+
+        areas = 2*pi*bounds[2]*np.r_[0.5, np.ones(p.size - 2, float), 0.5]
+
+    # reverse area order according to parallel direction
+    return areas if e > s else np.flip(areas)
+
+
+
+def calc_perimeter(bounds:tuple, normal:tuple, curvature:int, depth:float=0.0) -> float:
+    """Calculates a mesh edge face's perimeter."""
+
+    # planar
+    if curvature == 0:
+        perimeter = 2*(bounds[1] - bounds[0])*depth
+
+    # curved, horizontal
+    elif normal[0] == 0:
+        perimeter = 2*pi*(bounds[0] + bounds[1])
+
+    # curved, vertical
+    else:
+        perimeter = 4*pi*bounds[2]
+
+    return perimeter
