@@ -573,7 +573,7 @@ def calc_edge_states(cfg:dict) -> None:
                         state_type = 'direct'
                         state_val += boundary_condition['value']
                         du = edge_link['u_in'] - boundary_condition['value']
-                        q = sum(edge['direction'])*edge_link['k_bar']*du / edge_link['h_norm']
+                        q = sum(edge['direction'])*edge_link['k_bar']*du / edge_link['hn']
                         flux = q
                         break
 

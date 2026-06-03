@@ -8,7 +8,6 @@ import numpy as np
 from .lumped_capacitor import init_lc
 from .mesh import init_mesh, update_mesh, calc_edge_states
 from .util import update_properties
-from .plotter import animate_temp_2d, plot_total_powers
 
 
 
@@ -28,7 +27,7 @@ def run_simulation(config:str):
     - the global time array, named 't'
     """
 
-    # load runtime settings and mesh definitions
+    # load runtime settings and simulation variables
     with open(join(getcwd(), 'configs', config), 'r', encoding='utf-8') as cfg:
         cfg = yaml.load(cfg, Loader=yaml.SafeLoader)
 
@@ -45,14 +44,12 @@ def run_simulation(config:str):
 
     config = {'runtime':runtime}
 
-    # initialise meshes
     meshes = {}
     if cfg.get('meshes') is not None:
         for key, mesh in cfg['meshes'].items():
             meshes.update({key:init_mesh(mesh, cfg['force_finer'])})
         config.update({'meshes':meshes})
 
-    # initialise lumped capacitors
     lumped_capacitors = {}
     if cfg.get('lumped_capacitors') is not None:
         for key, lc in cfg['lumped_capacitors'].items():
@@ -107,12 +104,7 @@ def run_simulation(config:str):
         # for c in lumped_capacitors.values():
         #     c['u_last'] = c['u_latest']
         #     update_properties(c)
-        #     # TODO: calculate powers at each edge
-        #     # TODO: update temperature per sensible enthalpy
 
     results = config
     results.update({'t':t})
-
-    # plotting / rendering
-    animate_temp_2d(results, save=True)
-    plot_total_powers(results)
+    return results
