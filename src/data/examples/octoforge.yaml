@@ -15,7 +15,8 @@ meshes:
     dy: 0.01
     u0: 288.0
     material: 'IN_26_firebrick'
-    curvature: 1
+    curvature: 0
+    depth: 0.1
 
     lines:
     - [[0.035, 0.0], [0.111, 0.0]]
@@ -58,8 +59,8 @@ meshes:
     boundary_conditions:
     - {edge: 0, mode: 'neumann', value: 0.0}
     # - {edge: 1, mode: 'conduction', link: 'meshes/rockwool_blanket/3'}
-    - {edge: 1, mode: 'convection', link: 'ambient_air'}
-    - {edge: 2, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'neumann', value: 0.0}
+    - {edge: 2, mode: 'convection', link: 'ambient_air'}
     - {edge: 3, mode: 'neumann', value: 0.0}
     
     - {edge: 4, mode: 'radiation', link: 'heating_element'}

@@ -2,6 +2,7 @@
 
 from os import getcwd
 from os.path import join
+from math import pi
 import numpy as np
 import yaml
 
@@ -58,3 +59,22 @@ def get_decimal_resolution(num) -> int:
         return 0
 
     return len(str(num).split('.')[1])
+
+
+
+def calc_face_perimeter(bounds:tuple, normal:tuple, curvature:int, depth:float=0.0) -> float:
+    """Calculates a mesh edge face's perimeter."""
+
+    # planar
+    if curvature == 0:
+        perimeter = 2*(bounds[1] - bounds[0] + depth)
+
+    # curved, horizontal
+    elif normal[0] == 0:
+        perimeter = 2*pi*(bounds[0] + bounds[1])
+
+    # curved, vertical
+    else:
+        perimeter = 4*pi*bounds[2]
+
+    return perimeter

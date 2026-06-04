@@ -179,23 +179,42 @@ def plot2d_flat(results:dict, **kwargs) -> None:
         plt.show()
 
 
+
 def plot_total_powers(results:dict):
     """Temporary plotter for mesh total powers."""
 
-    fig, ax = plt.subplots()
+    fig, axs = plt.subplots(2, 2)
+    ax_pwr = axs[0, 0]
+    ax_energy = axs[1, 0]
+    ax_mean_temp = axs[0, 1]
+    dt = np.r_[0, results['t'][1:] - results['t'][:-1]]
 
-    for key, mesh in results['meshes'].items():
+    for mesh in results['meshes'].values():
 
         total_power = 0.0
         for p in mesh['edge_powers']:
             total_power += p
 
-        ax.plot(results['t'], total_power, '-', label=key)
+        ax_pwr.plot(results['t'], total_power, '-', label=mesh['label'])
+        ax_energy.plot(results['t'], np.cumsum(dt*total_power), '-*', label=mesh['label'] + 'stored')
+        ax_energy.plot(results['t'], mesh['net_energy'], '-', label=mesh['label'] + 'substepped')
+        ax_mean_temp.plot(results['t'], np.mean(mesh['u'], axis=(0, 1), dtype=np.float64), '-', label=mesh['label'])
 
-    ax.set_xlabel("Time, s")
-    ax.set_ylabel("Power, W")
-    ax.legend()
-    ax.grid(True)
+    ax_pwr.set_xlabel("Time, s")
+    ax_pwr.set_ylabel("Power, W")
+    ax_pwr.legend()
+    ax_pwr.grid(True)
+
+    ax_energy.set_xlabel("Time, s")
+    ax_energy.set_ylabel("Energy Change, J")
+    ax_energy.legend()
+    ax_energy.grid(True)
+
+    ax_mean_temp.set_xlabel("Time, s")
+    ax_mean_temp.set_ylabel("Mean Temperature, K")
+    ax_mean_temp.legend()
+    ax_mean_temp.grid(True)
+
     fig.tight_layout()
     plt.show()
 

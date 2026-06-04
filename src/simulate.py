@@ -28,7 +28,7 @@ def run_simulation(config:str):
     """
 
     # load runtime settings and simulation variables
-    with open(join(getcwd(), 'configs', config), 'r', encoding='utf-8') as cfg:
+    with open(join(getcwd(), 'src', 'data', 'examples', config), 'r', encoding='utf-8') as cfg:
         cfg = yaml.load(cfg, Loader=yaml.SafeLoader)
 
     runtime = {}
@@ -67,6 +67,7 @@ def run_simulation(config:str):
 
     t = np.zeros(1, float)
     t_now = t[-1]
+    energy_change = 0.0
 
     while t_now < runtime['tf']:
 
@@ -93,6 +94,9 @@ def run_simulation(config:str):
                                         curv=m['curvature'],
                                         theta=runtime['theta'])
 
+
+            energy_change += dt*sum(m['edge_powers_latest'])
+
             if store:
                 m['u'] = np.dstack((m['u'], m['u_latest']))
 
@@ -100,10 +104,7 @@ def run_simulation(config:str):
                     m['edge_fluxes'][e] = np.append(m['edge_fluxes'][e],m['edge_fluxes_latest'][e])
                     m['edge_powers'][e] = np.append(m['edge_powers'][e],m['edge_powers_latest'][e])
 
-        # update lumped capacitors
-        # for c in lumped_capacitors.values():
-        #     c['u_last'] = c['u_latest']
-        #     update_properties(c)
+                m['net_energy'] = np.append(m['net_energy'], energy_change)
 
     results = config
     results.update({'t':t})

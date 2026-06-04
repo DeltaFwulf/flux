@@ -20,7 +20,7 @@ from math import copysign, pi
 import numpy as np
 import yaml
 
-from .util import update_properties, calc_bc_relations, get_decimal_resolution
+from .util import update_properties, calc_bc_relations, get_decimal_resolution, calc_face_perimeter
 from .heat_transfer import conduction, convection, radiation
 
 
@@ -88,6 +88,8 @@ def init_mesh(mesh_def:dict, force_finer:bool):
     m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
 
     update_properties(m)
+
+    m.update({'net_energy':np.zeros(1, float)})
 
     return m
 
@@ -217,7 +219,7 @@ def find_edges(mesh:dict) -> list:
                                                 mesh['curvature'],
                                                 mesh.get('depth'))})
 
-                edge.update({'perimeter':calc_perimeter(edge['bounds'],
+                edge.update({'perimeter':calc_face_perimeter(edge['bounds'],
                                            edge['direction'],
                                            mesh['curvature'],
                                            mesh.get('depth'))})
@@ -245,7 +247,7 @@ def find_edges(mesh:dict) -> list:
                                                 mesh['curvature'],
                                                 mesh.get('depth'))})
 
-                edge.update({'perimeter':calc_perimeter(edge['bounds'],
+                edge.update({'perimeter':calc_face_perimeter(edge['bounds'],
                                            edge['direction'],
                                            mesh['curvature'],
                                            mesh.get('depth'))})
@@ -330,6 +332,7 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     for j in range(j_arr.size):
         for reg in mesh['regions_x'][j]:
 
+            # XXX: this may now be redundant
             s = np.where(i_arr == reg['bounds'][0])[0][0]
             e = np.where(i_arr == reg['bounds'][1])[0][0]
 
@@ -572,25 +575,22 @@ def calc_edge_states(cfg:dict) -> None:
                     case 'dirichlet':
                         state_type = 'direct'
                         state_val += boundary_condition['value']
-                        du = edge_link['u_in'] - boundary_condition['value']
-                        q = sum(edge['direction'])*edge_link['k_bar']*du / edge_link['hn']
-                        flux = q
+                        du = boundary_condition['value'] - edge_link['u_in']
+                        flux = edge_link['k_bar']*du / edge_link['hn']
                         break
 
                     case 'neumann':
                         state_type = 'gradient'
                         state_val += boundary_condition['value']
-                        q = -sum(edge_link['direction'])*edge_link['k_bar']*state_val
-                        flux = q
+                        flux = -sum(edge_link['direction'])*edge_link['k_bar']*state_val
                         break
 
                     case 'conduction':
                         state_type = 'direct'
                         pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         edge_state = conduction(edge_link, pair_link)
-                        q = edge_state['q']
+                        flux = edge_state['q']
                         state_val = edge_state['u_int']
-                        flux = q
                         break
 
                     case 'convection':
@@ -654,22 +654,3 @@ def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0
 
     # reverse area order according to parallel direction
     return areas if e > s else np.flip(areas)
-
-
-
-def calc_perimeter(bounds:tuple, normal:tuple, curvature:int, depth:float=0.0) -> float:
-    """Calculates a mesh edge face's perimeter."""
-
-    # planar
-    if curvature == 0:
-        perimeter = 2*(bounds[1] - bounds[0])*depth
-
-    # curved, horizontal
-    elif normal[0] == 0:
-        perimeter = 2*pi*(bounds[0] + bounds[1])
-
-    # curved, vertical
-    else:
-        perimeter = 4*pi*bounds[2]
-
-    return perimeter

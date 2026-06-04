@@ -22,14 +22,8 @@ def conduction(edge:dict, link:dict) -> dict:
 def radiation(edge:dict, link:dict) -> np.ndarray:
     """Calculates thermal flux due to radiation between edge and link object"""
 
-    # TODO: add cases to get a better flux estimate (grey body with view factor)
-
     sb = 5.67e-8
     q = sb*(link['u4_mean'] - edge['u']**4) / (1 / link['emissivity'] + 1 / edge['emissivity'] - 1)
-
-    # under relax flux to prevent oscillation
-    k_relax = edge['k_bar']*(link['u4_mean']**0.25 - edge['u_in']) / (q*edge['hn'])
-    q *= np.minimum(np.ones_like(q, float), k_relax)
 
     return q
 
@@ -42,7 +36,7 @@ def convection(edge:dict, link:dict) -> np.ndarray:
 
     u_film = 0.5*(link['temperature'] + np.mean(edge['u']))
     beta = 1 / (u_film if link['phase'] != 'gas' else link['temperature'])
-    fluid = calc_fluid(deepcopy(link) | {'temperature':u_film})
+    fluid = get_fluid_properties(deepcopy(link) | {'temperature':u_film})
     du = link['temperature'] - edge['u']
     l = np.arange(0, (edge['indices'][1] + 1 - edge['indices'][0])*edge['hp'], edge['hp'])
     reynolds = abs(link['velocity']*l[-1] / fluid['kinematic_viscosity'])
@@ -85,7 +79,7 @@ def convection(edge:dict, link:dict) -> np.ndarray:
 
 
 
-def calc_fluid(params:dict):
+def get_fluid_properties(params:dict):
     """Returns fluid properties as a dictionary using pyfluids."""
 
     # Temporary Fix: convert temperature to celsius
