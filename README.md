@@ -26,6 +26,6 @@ _Flux_ calculates the appropriate convection correlation to use (natural convect
 <br>
 
 <br>
-Here, a pipe of ID 200mm and OD 1000mm is held at 500K on the internal face and 300K on the outer face, with the top and bottom faces insulated (infinite length condition). The pipe tends to teh natural logarithm curve for steady state cylindrical objects.
+Here, a pipe of ID 200mm and OD 1000mm is held at 500K on the internal face and 300K on the outer face, with the top and bottom faces insulated (infinite length condition). The pipe tends to the natural logarithm curve for steady state cylindrical objects.
 
 <img width="640" height="480" alt="pipe_30k" src="https://github.com/user-attachments/assets/4923988c-2434-4920-aa4e-9fbce5a3533e" />
