@@ -23,3 +23,9 @@ This image shows the transient temperature of one of OctoForge's firebricks when
 The image below shows two rectangular prisms convecting heat away on all exposed sides, and conducting into one another. The meshes start at 500 and 600 K, respectively, and the air is at 288 K.
 _Flux_ calculates the appropriate convection correlation to use (natural convection, vertical, or stable/unstable horizontal wall, or forced if above critical Reynolds number).
 <img width="640" height="480" alt="flux_animation" src="https://github.com/user-attachments/assets/70901c06-c545-4880-9a56-011a27f7627b" />
+<br>
+
+<br>
+Here, a pipe of ID 200mm and OD 1000mm is held at 500K on the internal face and 300K on the outer face, with the top and bottom faces insulated (infinite length condition). The pipe tends to teh natural logarithm curve for steady state cylindrical objects.
+
+<img width="640" height="480" alt="pipe_30k" src="https://github.com/user-attachments/assets/4923988c-2434-4920-aa4e-9fbce5a3533e" />
