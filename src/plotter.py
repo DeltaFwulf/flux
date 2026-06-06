@@ -62,9 +62,9 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 
         for k, m in meshes.items():
 
-            u_masked = np.ma.masked_where(m['mask'], m['u'][:,:,frame]).transpose()
+            u_masked = np.ma.masked_where(masks[k], m['u'][:,:,frame]).transpose()
             ax.plot_surface(xm[k], ym[k], u_masked,
-                            edgecolor=m['material']['colour'],
+                            edgecolor=m['colour'],
                             cmap='magma',
                             norm=norm,
                             alpha=1.0,
@@ -92,11 +92,12 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 
     xm = {}
     ym = {}
-
-    for k in meshes.keys():
-        xk, yk = np.meshgrid(meshes[k]['x'], meshes[k]['y'])
+    masks = {}
+    for k, m in meshes.items():
+        xk, yk = np.meshgrid(m['x'], m['y'])
         xm.update({k:xk})
         ym.update({k:yk})
+        masks.update({k:mask_void_regions(m)})
 
     plt.style.use('dark_background')
     norm = plt.Normalize(u_min, u_max)
@@ -129,13 +130,14 @@ def plot2d_flat(results:dict, **kwargs) -> None:
     plt.style.use('dark_background')
     fig, ax_transient = plt.subplots(layout='compressed')
 
-
     xm = {}
     ym = {}
+    masks = {}
     for k, m in results['meshes'].items():
         xk, yk = np.meshgrid(m['x'], m['y'])
         xm.update({k:xk})
         ym.update({k:yk})
+        masks.update({k:mask_void_regions(m)})
 
 
     def plot_mesh(ax, xm:np.ndarray, ym:np.ndarray, u:np.ndarray):
@@ -150,14 +152,14 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
         for k, m in results['meshes'].items():
 
-            u_masked = np.ma.masked_where(m['mask'], m['u'][:,:,frame]).transpose()
+            u_masked = np.ma.masked_where(masks[k], m['u'][:,:,frame]).transpose()
             plot_mesh(ax_transient, xm[k], ym[k], u_masked)
 
             for li in m['line_indices']:
                 ax_transient.plot(np.array([li[0][0], li[1][0]])*m['dx'],
                                   np.array([li[0][1], li[1][1]])*m['dy'],
                                   linestyle='-',
-                                  color=m['material']['colour'])
+                                  color=m['colour'])
 
         ax_transient.set_aspect('equal')
         ax_transient.set_xlabel('x, m')
@@ -177,6 +179,76 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
     if not saved:
         plt.show()
+
+
+
+def plot_total_powers(results:dict):
+    """Temporary plotter for mesh total powers."""
+    
+    # TODO: make grid lines thinner 
+
+    fig, axs = plt.subplots(2, 2)
+    ax_pwr = axs[0, 0]
+    ax_energy = axs[1, 0]
+    ax_mean_temp = axs[0, 1]
+    ax_flux = axs[1, 1]
+    dt = np.r_[0, results['t'][1:] - results['t'][:-1]]
+
+    for mesh in results['meshes'].values():
+
+        total_power = 0.0
+        for p in mesh['edge_powers']:
+            total_power += p
+
+        ax_pwr.plot(results['t'], total_power, '-', label=mesh['label'])
+        ax_energy.plot(results['t'], np.cumsum(dt*total_power), '-*', label=mesh['label'] + ' stored')
+        ax_energy.plot(results['t'], mesh['net_energy'], '-', label=mesh['label'] + ' sub-stepped')
+        ax_mean_temp.plot(results['t'], np.mean(mesh['u'], axis=(0, 1), dtype=np.float64), '-', label=mesh['label'])
+
+        for l, flux in enumerate(mesh['edge_fluxes']):
+            ax_flux.plot(results['t'], flux, label=l)
+
+    ax_pwr.set_xlabel("Time, s")
+    ax_pwr.set_ylabel("Power, W")
+    ax_pwr.legend()
+    ax_pwr.grid(True)
+
+    ax_energy.set_xlabel("Time, s")
+    ax_energy.set_ylabel("Energy Change, J")
+    ax_energy.legend()
+    ax_energy.grid(True)
+
+    ax_mean_temp.set_xlabel("Time, s")
+    ax_mean_temp.set_ylabel("Mean Temperature, K")
+    ax_mean_temp.legend()
+    ax_mean_temp.grid(True)
+
+    ax_flux.set_xlabel("Time, s")
+    ax_flux.set_ylabel("Flux by edge, W/m^2")
+    ax_flux.legend()
+    ax_flux.grid(True)
+
+    fig.tight_layout()
+    plt.show()
+
+
+
+def mask_void_regions(mesh:dict) -> np.ndarray:
+    """Masks a mesh's void regions so plotters ignore them.
+    
+    By scanning through all regions in one direction, the 'voids'
+    between different regions can be located and a mask array created
+    for plotters, so that meshes are plotted with clean boundaries.
+    """
+
+    mask = np.zeros((mesh['i'].size, mesh['j'].size,), bool)
+
+    # iterate through all x slices and locate all void regions
+    for j, row in enumerate(mesh['regions_x']):
+        for reg in row:
+            mask[:, j] = [not (reg['bounds'][0] <= i <= reg['bounds'][1]) for i in mesh['i']]
+
+    return mask
 
 
 

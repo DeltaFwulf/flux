@@ -1,0 +1,50 @@
+# Simulate a solid cylinder with dirichlet boundary condition at outer face
+
+
+tf: 30000
+dt_storage: 300.0
+dt_max: 20.0
+theta: 0.5
+max_courant: 0.5
+force_finer: True
+
+meshes:
+  pipe:
+    label: 'pipe'
+    colour: 'grey'
+    dx: 0.01
+    dy: 0.5
+    u0: 500
+    material: 'testonium'
+    curvature: 1
+    
+    lines:
+    - [[0.01, 0.0], [0.15, 0.0]]
+    - [[0.15, 0.0], [0.15, 1.0]]
+    - [[0.15, 1.0], [0.01, 1.0]]
+    - [[0.01, 1.0], [0.01, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    # - {edge: 1, mode: 'convection', link: 'cold_air'}
+    - {edge: 1, mode: 'dirichlet', value: 300.0}
+    - {edge: 2, mode: 'neumann', value: 0.0}
+    # - {edge: 3, mode: 'convection', link: 'hot_air'}
+    - {edge: 3, mode: 'dirichlet', value: 500.0}
+
+
+environment:
+
+  hot_air:
+    name: 'Air'
+    temperature: 500.0
+    pressure: 100000
+    phase: 'gas'
+    velocity: 0.0
+
+  cold_air:
+    name: 'Air'
+    temperature: 300.0
+    pressure: 100000
+    phase: 'gas'
+    velocity: 0.0
