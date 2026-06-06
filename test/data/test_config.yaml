@@ -1,0 +1,23 @@
+# Used by unittest cases when a configuration file is required.
+
+meshes:
+  some_mesh:
+    label: 'test mesh'
+    dx: 0.1
+    dy: 0.1
+    u0: 100.0
+    material: 'testonium'
+    curvature: 0
+    depth: 1.0
+
+    lines:
+    - [[0.0, 0.0], [1.0, 0.0]]
+    - [[1.0, 0.0], [1.0, 1.0]]
+    - [[1.0, 1.0], [0.0, 1.0]]
+    - [[0.0, 1.0], [0.0, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'neumann', value: 0.0}
+    - {edge: 2, mode: 'neumann', value: 0.0}
+    - {edge: 3, mode: 'neumann', value: 0.0}

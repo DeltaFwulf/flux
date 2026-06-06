@@ -22,19 +22,20 @@ def get_material(name:str) -> dict:
     return mat
 
 
-
+# TODO: just accept temperature arrays or value and return the dict
+#       don't need to give the whole dictionary, this adds weird
+#       dependency on the dictionary structure.
 def update_properties(solid:dict) -> None:
     """Updates a solid object's material properties (k, cp, rho) given a temperature."""
 
-    u = solid['u_last']
+    u = solid['u_prev']
     mat = solid['material']
 
     k = np.interp(x=u, xp=mat['u'], fp=mat['k'])
     cp = np.interp(x=u, xp=mat['u'], fp=mat['cp'])
     rho = np.interp(x=u, xp=mat['u'], fp=mat['rho'])
-    alpha = k / (rho*cp)
 
-    solid.update({'k':k, 'cp':cp, 'rho':rho, 'diffusivity':alpha})
+    solid.update({'k':k, 'cp':cp, 'rho':rho})
 
 
 

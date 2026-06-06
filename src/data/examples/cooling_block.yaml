@@ -13,8 +13,8 @@ force_finer: True
 meshes:
   coarse_block:
     label: 'cube'
-    dx: 0.001
-    dy: 0.001
+    dx: 0.005
+    dy: 0.005
 
     u0: 1000.0
     material: 'testonium'

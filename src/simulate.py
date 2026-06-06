@@ -6,7 +6,7 @@ import yaml
 import numpy as np
 
 from .lumped_capacitor import init_lc
-from .mesh import init_mesh, update_mesh, calc_edge_states
+from .mesh import create_mesh, update_mesh, calc_edge_states
 from .util import update_properties
 
 
@@ -47,7 +47,7 @@ def run_simulation(config:str):
     meshes = {}
     if cfg.get('meshes') is not None:
         for key, mesh in cfg['meshes'].items():
-            meshes.update({key:init_mesh(mesh, cfg['force_finer'])})
+            meshes.update({key:create_mesh(mesh, cfg['force_finer'])})
         config.update({'meshes':meshes})
 
     lumped_capacitors = {}
@@ -73,7 +73,7 @@ def run_simulation(config:str):
 
         # calculate timestep
         dt = min(runtime['dt_max'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
-                 / np.max(m['diffusivity']) for m in meshes.values()))
+                 / np.max(m['k'] / (m['rho']*m['cp'])) for m in meshes.values()))
 
         t_now += dt
         print("                                     ", end='\r')
@@ -82,9 +82,8 @@ def run_simulation(config:str):
         if store:
             t = np.hstack((t, t_now))
 
-        # update meshes
         for m in meshes.values():
-            m['u_last'] = m['u_latest']
+            m['u_prev'] = m['u_latest']
 
             update_properties(m)
             calc_edge_states(cfg=config)
@@ -93,7 +92,6 @@ def run_simulation(config:str):
                                         dt=dt,
                                         curv=m['curvature'],
                                         theta=runtime['theta'])
-
 
             energy_change += dt*sum(m['edge_powers_latest'])
 

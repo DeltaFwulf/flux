@@ -1,17 +1,4 @@
-"""Setup script for 2D mesh dictionaries.
-
-This contains all the functions required to build a useable mesh
-dictionary in flux.
-
-Meshes contain:
-- edges
-- regions
-- resolutions (x, y)
-- boundary conditions
-- curvature
-- material
-
-"""
+"""Contains functions used to manipulate meshes."""
 
 from os import getcwd
 from os.path import join
@@ -25,48 +12,36 @@ from .heat_transfer import conduction, convection, radiation
 
 
 
-def init_mesh(mesh_def:dict, force_finer:bool):
+def create_mesh(mesh_def:dict, force_finer:bool):
     """Prepares a mesh dictionary for simulation."""
 
     with open(join(getcwd(), 'src', 'data', 'materials.yaml'), encoding='utf-8') as f:
         materials = yaml.load(stream=f, Loader=yaml.SafeLoader)
 
     m = deepcopy(mesh_def)
+    m.pop('u0')
 
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
 
     z = 0
     while z < 2:
-        # mesh indices for line points
-        m['line_indices'] = [tuple((round((p[0] - x_min) / m['dx']),
-                                    round((p[1] - y_min) / m['dy']))
-                             for p in l) for l in m['lines']]
+        m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
+        m.update({'j':np.arange(0, max((p[1] - y_min) / m['dy'] for l in m['lines'] for p in l) + 1, dtype=int)})
 
-        i_min = min(p[0] for l in m['line_indices'] for p in l)
-        i_max = max(p[0] for l in m['line_indices'] for p in l)
-        j_min = min(p[1] for l in m['line_indices'] for p in l)
-        j_max = max(p[1] for l in m['line_indices'] for p in l)
+        x_res = max(get_decimal_resolution(n) for n in (m['dx'], x_min))
+        y_res = max(get_decimal_resolution(n) for n in (m['dy'], y_min))
+        m.update({'x':np.round(x_min + m['dx']*m['i'], x_res)})
+        m.update({'y':np.round(y_min + m['dy']*m['j'], y_res)})
 
-        m.update({'i_arr':np.arange(i_min, i_max + 1, 1)})
-        m.update({'j_arr':np.arange(j_min, j_max + 1, 1)})
-
-        # get all x slice regions
-        m.update({'regions_x':[slice_regions(m, direction='x', n=j) for j in m['j_arr']]})
-
-        # get all y slice regions
-        m.update({'regions_y':[slice_regions(m, direction='y', n=i) for i in m['i_arr']]})
+        m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
+        m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
 
         # rescale mesh
         if z == 0:
             fit_mesh_resolution(m, force_finer)
 
         z += 1
-
-    x_res = max(get_decimal_resolution(m['dx']), get_decimal_resolution(x_min))
-    y_res = max(get_decimal_resolution(m['dy']), get_decimal_resolution(y_min))
-    m.update({'x':np.round(x_min + m['dx']*m['i_arr'], x_res)})
-    m.update({'y':np.round(y_min + m['dy']*m['j_arr'], y_res)})
 
     mat = materials.get(m['material'])
     if mat is None:
@@ -79,11 +54,11 @@ def init_mesh(mesh_def:dict, force_finer:bool):
     calc_bc_relations(m)
     mask_void_regions(m)
 
-    # Meshes store 'u' for final results, u_latest for use in next timestep, u_last
-    # for reference by other meshes.
-    m.update({'u':np.zeros((m['i_arr'].size, m['j_arr'].size, 1), float) + m['u0']})
+    # Meshes store 'u' for final results, u_latest for use in next timestep, u_prev
+    # for use in current timestep.
+    m.update({'u':np.zeros((m['i'].size, m['j'].size, 1), float) + mesh_def['u0']})
     m.update({'u_latest':m['u'][:, :, -1]})
-    m.update({'u_last':m['u'][:, :, -1]})
+    m.update({'u_prev':m['u'][:, :, -1]})
     m.update({'edge_fluxes':[np.zeros(1, float) for e in range(len(m['edges']))]})
     m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
 
@@ -95,20 +70,18 @@ def init_mesh(mesh_def:dict, force_finer:bool):
 
 
 
-def slice_regions(mesh:dict, direction:str, n:int) -> list[dict]:
+def slice_regions(direction:str, xp:np.ndarray, xn:float, lines:list) -> list[dict]:
     """Calculates regions within a mesh slice.
 
     Regions are returned in ascending index order (+x or +y direction). These regions
     are used by the mesh ADI solver to identify where to apply boundary conditions
     and when to apply edge states.
 
-    The following variables are used:
-    - direction; 'x' or 'y'. This is the direction parallel to the slice.
-    - ind_n; this is the index of the slice, in the normal direction.
-    - ind_p; this is the array of indices within the slice, in the parallel direction.
-    - line_inds; this is the array of line boundary indices, snapped to the mesh grid.
-    - line_pts; this is the array of line boundary point locations, not snapped to mesh grid.
-    
+    - direction is either 'x' or 'y', giving the orientation of the slice
+    - xp is the array of parallel mesh node locations in the grid.
+    - xn is the coordinate of the slice in the normal axis.
+    - lines is the list of all line endpoint coordinates in the grid.
+
     Ouptutted regions contain the following:
     - type; either 'edge' or 'internal'.
     - direction; +- 1. This is the direction, normal to the edge line to the mesh interior.
@@ -118,76 +91,69 @@ def slice_regions(mesh:dict, direction:str, n:int) -> list[dict]:
     """
 
     a = 0 if direction == 'x' else 1 # gives line coordinate to inspect for normality
-    transitions = []
-    lefts = 0
-    rights = 0
+    transitions, regions = [], []
+    lefts, rights = 0, 0
 
-    for p in (mesh['i_arr'] if direction == 'x' else mesh['j_arr']):
+    for p in xp:
+        for l, line in enumerate(lines):
 
-        for l, line in enumerate(mesh['line_indices']):
-
-            na = line[0][1 - a] - n
-            nb = line[1][1 - a] - n
             is_normal = line[0][a] == line[1][a]
-            spans = copysign(1, na) != copysign(1, nb) or na*nb == 0
-            touches = p in (line[0][a], line[1][a])
+            na = line[0][1 - a] - xn
+            nb = line[1][1 - a] - xn
+            spans = copysign(1, na) != copysign(1, nb) or na + nb in (na, nb)
+            touches = p == line[0][a]
 
-            if is_normal and spans and touches:
+            if not (is_normal and spans and touches):
+                continue
 
-                if na*nb != 0:                      # both
-                    dn = 2
-                    lefts += 1
-                    rights += 1
-                    dp = 1 if (rights % 2 == lefts % 2 == 1) else -1
-                elif na > 0 or nb > 0:      # right
-                    dn = 1
-                    rights += 1
-                    dp = 1 if rights % 2 == 1 else -1
-                else:                               # left
-                    dn = -1
-                    lefts += 1
-                    dp = 1 if lefts % 2 == 1 else -1
+            if na*nb != 0:  # both directions
+                dn = 2
+                lefts += 1
+                rights += 1
+                dp = 1 if (rights % 2 == lefts % 2 == 1) else -1
+            elif na + nb > 0:  # right
+                dn = 1
+                rights += 1
+                dp = 1 if rights % 2 == 1 else -1
+            else:  # left
+                dn = -1
+                lefts += 1
+                dp = 1 if lefts % 2 == 1 else -1
 
-                transitions.append({'ind_parallel':p,
-                                    'line_index':l,
-                                    'normal':dn,
-                                    'parallel':dp})
+            transitions.append({'p':p,
+                                'line_index':l,
+                                'sign_n':dn,
+                                'sign_p':dp})
 
-                break
+            break
 
-    regions = []
-    for i, t in enumerate(transitions):
-        if i == 0:
-            continue
+    for t, trans in enumerate(transitions[1:], start=1):
+        trans_prev = transitions[t - 1]
+        bnd_a = int((trans_prev['p'] - xp[0]) / abs(xp[1] - xp[0]))
+        bnd_b = int((trans['p'] - xp[0]) / abs(xp[1] - xp[0]))
 
-        t_prev = transitions[i-1]
-
-        # region bounds
-        na = (t_prev['ind_parallel'], n) if a == 0 else (n, t_prev['ind_parallel'])
-        nb = (t['ind_parallel'], n) if a == 0 else (n, t['ind_parallel'])
-        reg = {'bounds':(na[a], nb[a])}
+        reg = {'bounds':(bnd_a, bnd_b)}
+        reg.update({'length':abs(trans['p'] - trans_prev['p'])})
 
         is_edge = False
-        for l, line in enumerate(mesh['line_indices']):
-            if na in line and nb in line:
+        for l, line in enumerate(lines):
+            aligned = set([line[0][a], line[1][a]]) == set([trans['p'], trans_prev['p']])
+            if aligned and line[0][1 - a] == xn:
                 is_edge = True
                 break
 
-        # edge region
-        if is_edge:
-            res = max(get_decimal_resolution(pt[a]) for pt in mesh['lines'][l])
-            reg.update({'length':round(abs(mesh['lines'][l][1][a] - mesh['lines'][l][0][a]), res)})
-            reg.update({'type':'edge', 'direction':-t['normal']*t['parallel'], 'line':l})
-            regions.append(reg)
+        if not is_edge and trans['sign_p'] != -1:
+            continue
 
-        # internal region
-        elif t['parallel'] == -1:
-            line_s = mesh['lines'][t_prev['line_index']]
-            line_e = mesh['lines'][t['line_index']]
-            res = max(get_decimal_resolution(pt) for pt in (line_s[0][a], line_e[0][a]))
-            reg.update({'length':round(abs(line_e[0][a] - line_s[0][a]), res)})
-            reg.update({'type':'internal', 'line_s':t_prev['line_index'], 'line_e':t['line_index']})
-            regions.append(reg)
+        if is_edge:
+            reg.update({'type':'edge', 'line':l})
+            reg.update({'direction':-trans['sign_n']*trans['sign_p']})
+
+        else:
+            reg.update({'type':'internal'})
+            reg.update({'line_s':trans_prev['line_index'], 'line_e':trans['line_index']})
+
+        regions.append(reg)
 
     return regions
 
@@ -202,8 +168,8 @@ def find_edges(mesh:dict) -> list:
         for reg in regs:
             if reg['type'] == 'edge':
 
-                s = int(np.where(mesh['i_arr'] == reg['bounds'][0])[0])
-                e = int(np.where(mesh['i_arr'] == reg['bounds'][1])[0])
+                s = int(np.where(mesh['i'] == reg['bounds'][0])[0][0])
+                e = int(np.where(mesh['i'] == reg['bounds'][1])[0][0])
 
                 edge = {}
                 edge.update({'indices':(s, e, k)})  # start, end, normal
@@ -230,8 +196,8 @@ def find_edges(mesh:dict) -> list:
         for reg in regs:
             if reg['type'] == 'edge':
 
-                s = int(np.where(mesh['j_arr'] == reg['bounds'][0])[0])
-                e = int(np.where(mesh['j_arr'] == reg['bounds'][1])[0])
+                s = int(np.where(mesh['j'] == reg['bounds'][0])[0][0])
+                e = int(np.where(mesh['j'] == reg['bounds'][1])[0][0])
 
                 edge = {}
                 edge.update({'indices':(s, e, k)})
@@ -263,6 +229,7 @@ def find_edges(mesh:dict) -> list:
 def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]:
     """Calculates a mesh resolution (dx, dy) that tiles the mesh with integer elements."""
 
+    # Does region actually need a 'length' term or can we just reconstruct it with dx or dy?
     widths_x = [reg['length'] for slc in mesh['regions_x'] for reg in slc]
     widths_y = [reg['length'] for slc in mesh['regions_y'] for reg in slc]
 
@@ -296,12 +263,12 @@ def mask_void_regions(mesh:dict) -> np.ndarray:
     for plotters, so that meshes are plotted with clean boundaries.
     """
 
-    mask = np.zeros((mesh['i_arr'].size, mesh['j_arr'].size,), bool)
+    mask = np.zeros((mesh['i'].size, mesh['j'].size,), bool)
 
     # iterate through all x slices and locate all void regions
     for j, row in enumerate(mesh['regions_x']):
         for reg in row:
-            mask[:, j] = [not (reg['bounds'][0] <= i <= reg['bounds'][1]) for i in mesh['i_arr']]
+            mask[:, j] = [not (reg['bounds'][0] <= i <= reg['bounds'][1]) for i in mesh['i']]
 
     # update the mesh's 'mask' term
     mesh.update({'mask':mask})
@@ -311,11 +278,14 @@ def mask_void_regions(mesh:dict) -> np.ndarray:
 def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     """Updates the state of a single mesh over a single timestep via the ADI method."""
 
-    i_arr = mesh['i_arr']
-    j_arr = mesh['j_arr']
+    # TODO: shorten name to m, directly reference instead of making all these 
+    #       pointless local variables
+
+    i_arr = mesh['i']
+    j_arr = mesh['j']
     dx = mesh['dx']
     dy = mesh['dy']
-    alpha = mesh['diffusivity']
+    alpha = mesh['k'] / (mesh['rho']*mesh['cp'])
 
     # calculate mesh coefficients
     bxx_c = alpha*dt*(1 - theta) / dx**2
@@ -325,16 +295,15 @@ def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     bx_c = curv*alpha*(1 - theta)*dt / (2*dx)
     bx_n = curv*alpha*theta*dt / (2*dx)
 
-    u_in = mesh['u_last']
+    u_in = mesh['u_prev']
     u_mid = np.zeros_like(u_in, float)
 
     # row slices (across x)
     for j in range(j_arr.size):
         for reg in mesh['regions_x'][j]:
 
-            # XXX: this may now be redundant
-            s = np.where(i_arr == reg['bounds'][0])[0][0]
-            e = np.where(i_arr == reg['bounds'][1])[0][0]
+            s = reg['bounds'][0]
+            e = reg['bounds'][1]
 
             if reg['type'] == 'edge':
 
@@ -472,8 +441,8 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
 
         link_obj.update({'hn':mesh['dx'] if link_obj['direction'][0] == 0 else mesh['dy']})
         s, e, n = link_obj['indices']
-        u = mesh['u_last'][s:e+1, n] if link_obj['direction'][0] == 0 else\
-            mesh['u_last'][n, s:e+1].ravel()
+        u = mesh['u_prev'][s:e+1, n] if link_obj['direction'][0] == 0 else\
+            mesh['u_prev'][n, s:e+1].ravel()
 
         link_obj.update({'u':u})
 
@@ -484,9 +453,9 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
 
         elif mode == 'conduction':
 
-            u_in = (mesh['u_last'][s:e+1, n+sum(link_obj['direction'])] if\
+            u_in = (mesh['u_prev'][s:e+1, n+sum(link_obj['direction'])] if\
                     link_obj['direction'][0] == 0 else\
-                    mesh['u_last'][n+sum(link_obj['direction']), s:e+1]).ravel()
+                    mesh['u_prev'][n+sum(link_obj['direction']), s:e+1]).ravel()
 
             k = (mesh['k'][s:e+1, n] if link_obj['direction'][0] == 0 else\
                 mesh['k'][n, s:e+1]).ravel()
@@ -512,10 +481,10 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
         s_edge, e_edge = edge['indices'][:2]
         lc = cfg['lumped_capacitors'][split_link[1]]
         link_obj = deepcopy(lc['edges'][int(split_link[2])]) | {'type':'lc_edge'}
-        link_obj.update({'u':lc['u_last'] + np.zeros((e_edge - s_edge + 1), float)})
+        link_obj.update({'u':lc['u_prev'] + np.zeros((e_edge - s_edge + 1), float)})
 
         if mode == 'radiation':
-            link_obj.update({'u4_mean':lc['u_last']**4})
+            link_obj.update({'u4_mean':lc['u_prev']**4})
             link_obj.update({'emissivity':lc['material']['emissivity']})
 
     else:
@@ -555,13 +524,13 @@ def calc_edge_states(cfg:dict) -> None:
 
             # get appropriate slice of temperature, conductivity, etc.
             if edge['direction'][0] == 0: # slice along x axis
-                edge_link.update({'u':mesh['u_last'][s:e+1, n]})
-                edge_link.update({'u_in':mesh['u_last'][s:e+1, n+d]})
+                edge_link.update({'u':mesh['u_prev'][s:e+1, n]})
+                edge_link.update({'u_in':mesh['u_prev'][s:e+1, n+d]})
                 edge_link.update({'k_bar':0.5*(mesh['k'][s:e+1, n] + mesh['k'][s:e+1, n+d])})
 
             else:
-                edge_link.update({'u':mesh['u_last'][n, s:e+1]})
-                edge_link.update({'u_in':mesh['u_last'][n+d, s:e+1]})
+                edge_link.update({'u':mesh['u_prev'][n, s:e+1]})
+                edge_link.update({'u_in':mesh['u_prev'][n+d, s:e+1]})
                 edge_link.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
 
             state_val = np.zeros((e - s + 1), float)

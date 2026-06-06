@@ -77,7 +77,12 @@ class MeshAreaTests(unittest.TestCase):
         h = 1.0
         normal = (0.0, 1.0)
         curvature = 1
-        expected = np.array([7.06858347057703, 18.849555921538, 25.132741228718, 31.415926535897, 18.064157758141])
+        expected = np.array([7.06858347057703,
+                             18.849555921538,
+                             25.132741228718,
+                             31.415926535897,
+                             18.064157758141])
+
         assert_allclose(calc_areas(bounds, h, normal, curvature), expected, atol=1e-6)
 
 

@@ -15,7 +15,7 @@ def init_lc(lc_def:dict) -> dict:
     lc.update({'material':get_material(lc_def['material'])})
     lc.update({'u':lc_def['u0']})
     lc.update({'u_latest':lc_def['u0']})
-    lc.update({'u_last':lc_def['u0']})
+    lc.update({'u_prev':lc_def['u0']})
 
     find_edges(lc)
     update_properties(lc)
