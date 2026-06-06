@@ -1,7 +1,7 @@
 # Simulation file for OctoForge Chamber
 
-tf: 8000
-dt_storage: 20.0  # dt at which to store results to array
+tf: 8000.0
+dt_storage: 40.0  # dt at which to store results to array
 dt_max: 5.0      # maximum dt in simulation
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
@@ -11,11 +11,12 @@ meshes:
 
   firebrick:
     label: 'firebrick'
+    colour: 'brown'
     dx: 0.01
     dy: 0.01
     u0: 288.0
     material: 'IN_26_firebrick'
-    curvature: 0
+    curvature: 1
     depth: 0.1
 
     lines:
@@ -58,9 +59,8 @@ meshes:
 
     boundary_conditions:
     - {edge: 0, mode: 'neumann', value: 0.0}
-    # - {edge: 1, mode: 'conduction', link: 'meshes/rockwool_blanket/3'}
-    - {edge: 1, mode: 'neumann', value: 0.0}
-    - {edge: 2, mode: 'convection', link: 'ambient_air'}
+    - {edge: 1, mode: 'conduction', link: 'meshes/rockwool_blanket/3'}
+    - {edge: 2, mode: 'neumann', value: 0.0}
     - {edge: 3, mode: 'neumann', value: 0.0}
     
     - {edge: 4, mode: 'radiation', link: 'heating_element'}
@@ -87,67 +87,65 @@ meshes:
 
     - {edge: 19, mode: 'neumann', value: 0.0}
 
-  # rockwool_blanket:
-  #   label: 'rockwool blanket'
-  #   dx: 0.01
-  #   dy: 0.01
-  #   u0: 288.0
-  #   material: 'IN_26_firebrick'
-  #   curvature: 1
+  rockwool_blanket:
+    label: 'rockwool blanket'
+    colour: 'white'
+    dx: 0.01
+    dy: 0.01
+    u0: 288.0
+    material: 'IN_26_firebrick'
+    curvature: 1
 
-  #   lines:
-  #   - [[0.111, 0.0], [0.211, 0.0]]
-  #   - [[0.211, 0.0], [0.211, 0.15]]
-  #   - [[0.211, 0.15], [0.111, 0.15]]
-  #   - [[0.111, 0.15], [0.111, 0.0]]
+    lines:
+    - [[0.111, 0.0], [0.211, 0.0]]
+    - [[0.211, 0.0], [0.211, 0.15]]
+    - [[0.211, 0.15], [0.111, 0.15]]
+    - [[0.111, 0.15], [0.111, 0.0]]
 
-  #   boundary_conditions:
-  #   - {edge: 0, mode: 'neumann', value: 0.0}
-  #   # - {edge: 1, mode: 'conduction', link: 'lumped_capacitors/outer_panel/3'}
-  #   # - {edge: 1, mode: 'convection', link: 'ambient_air'}
-  #   # - {edge: 1, mode: 'neumann', value: 0.0}
-  #   - {edge: 1, mode: 'dirichlet', value: 288.0}
-  #   - {edge: 2, mode: 'neumann', value: 0.0}
-  #   - {edge: 3, mode: 'conduction', link: 'meshes/firebrick/1'}
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'neumann', value: 0.0}
+    - {edge: 3, mode: 'conduction', link: 'meshes/firebrick/1'}
 
 
 lumped_capacitors:
 
-  crucible:
-    label: 'graphite crucible'
-    u0: 288.0
-    material: 'graphite'
-    curvature: 1
+  # crucible:
+  #   label: 'graphite crucible'
+  #   u0: 288.0
+  #   material: 'graphite'
+  #   curvature: 1
 
-    lines:
-    - [[0.0, 0.0], [0.025, 0.0]]
-    - [[0.025, 0.0], [0.025, 0.15]]
-    - [[0.025, 0.15], [0.0, 0.15]]
-    - [[0.0, 0.15], [0.0, 0.0]]
+  #   lines:
+  #   - [[0.0, 0.0], [0.025, 0.0]]
+  #   - [[0.025, 0.0], [0.025, 0.15]]
+  #   - [[0.025, 0.15], [0.0, 0.15]]
+  #   - [[0.0, 0.15], [0.0, 0.0]]
 
-    boundary_conditions:
-    - {edge: 0, mode: 'neumann', value: 0.0}
-    - {edge: 1, mode: 'radiation', link: 'firebrick/3'}
-    - {edge: 2, mode: 'neumann', value: 0.0}
-    - {edge: 3, mode: 'neumann', value: 0.0}
+  #   boundary_conditions:
+  #   - {edge: 0, mode: 'neumann', value: 0.0}
+  #   - {edge: 1, mode: 'radiation', link: 'firebrick/3'}
+  #   - {edge: 2, mode: 'neumann', value: 0.0}
+  #   - {edge: 3, mode: 'neumann', value: 0.0}
 
-  outer_panel:
-    label: 'steel outer panel'
-    u0: 288.0
-    material: 'stainless_steel'
-    curvature: 1
+  # outer_panel:
+  #   label: 'steel outer panel'
+  #   u0: 288.0
+  #   material: 'stainless_steel'
+  #   curvature: 1
 
-    lines:
-    - [[0.211, 0.0], [0.213, 0.0]]
-    - [[0.213, 0.0], [0.213, 0.15]]
-    - [[0.213, 0.15], [0.211, 0.15]]
-    - [[0.211, 0.15], [0.211, 0.0]]
+  #   lines:
+  #   - [[0.211, 0.0], [0.213, 0.0]]
+  #   - [[0.213, 0.0], [0.213, 0.15]]
+  #   - [[0.213, 0.15], [0.211, 0.15]]
+  #   - [[0.211, 0.15], [0.211, 0.0]]
 
-    boundary_conditions:
-    - {edge: 0, mode: 'convection', link: 'ambient_air'}
-    - {edge: 1, mode: 'convection', link: 'ambient_air'}
-    - {edge: 2, mode: 'convection', link: 'ambient_air'}
-    - {edge: 3, mode: 'conduction', link: 'meshes/rockwool_blanket/1'}
+  #   boundary_conditions:
+  #   - {edge: 0, mode: 'convection', link: 'ambient_air'}
+  #   - {edge: 1, mode: 'convection', link: 'ambient_air'}
+  #   - {edge: 2, mode: 'convection', link: 'ambient_air'}
+  #   - {edge: 3, mode: 'conduction', link: 'meshes/rockwool_blanket/1'}
 
 
 environment:

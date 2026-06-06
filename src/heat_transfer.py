@@ -20,12 +20,22 @@ def conduction(edge:dict, link:dict) -> dict:
 
 
 def radiation(edge:dict, link:dict) -> np.ndarray:
-    """Calculates thermal flux due to radiation between edge and link object"""
+    """Calculates thermal flux due to radiation between edge and link object.
+    
+    If the calculated flux would cause the edge to overshoot the link's
+    temperature, it is damped to reach only 80% of the radiator temperature.
+    This is to prevent oscillations where the mesh is too coarse to simulate
+    very high radiative fluxes.
+    """
 
     sb = 5.67e-8
     q = sb*(link['u4_mean'] - edge['u']**4) / (1 / link['emissivity'] + 1 / edge['emissivity'] - 1)
 
-    return q
+    # under-relax flux to prevent oscillations
+    du = edge['hn']*q / edge['k_bar']
+    du_max = link['u4_mean']**0.25 - edge['u_in']
+
+    return q*np.minimum(np.ones_like(q, float), 0.8*du_max / du)
 
 
 

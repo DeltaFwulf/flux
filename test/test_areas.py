@@ -102,11 +102,11 @@ class MeshAreaTests(unittest.TestCase):
         """vertical, curved face area."""
 
         bounds = (-2.0, 2.0, 1.0)
-        h = 1.0
+        h = 0.5
         normal = (1.0, 0.0)
         curvature = 1
 
-        expected = pi*np.array([1, 2, 2, 2, 1], float)
+        expected = 2*pi*h*np.r_[0.5, np.ones(7), 0.5]
         assert_allclose(calc_areas(bounds, h, normal, curvature), expected)
 
 
@@ -120,3 +120,14 @@ class MeshAreaTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             calc_areas(bounds, h, normal, curvature)
+
+
+    def test_array_length(self):
+        """The returned array should have same length as edge has points."""
+
+        bounds = (0.111, 0.211, 0.0)
+        h = 0.00625
+        normal = (1.0, 0.0)
+        curvature = 1
+
+        self.assertEqual(calc_areas(bounds, h, normal, curvature).size, 17)

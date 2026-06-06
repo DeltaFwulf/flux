@@ -5,6 +5,6 @@ from src.plotter import animate_temp_2d, plot_total_powers
 
 
 
-results = run_simulation("cooling_block.yaml")
-animate_temp_2d(results, save=False)
+results = run_simulation("pipe.yaml")
+animate_temp_2d(results, save=True)
 plot_total_powers(results)

@@ -17,24 +17,18 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
 
-    z = 0
-    while z < 2:
-        m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
-        m.update({'j':np.arange(0, max((p[1] - y_min) / m['dy'] for l in m['lines'] for p in l) + 1, dtype=int)})
+    # fix mesh resolution
+    m = m | calc_new_resolution(m['lines'], m['dx'], m['dy'], force_finer)
 
-        x_res = max(get_decimal_resolution(n) for n in (m['dx'], x_min))
-        y_res = max(get_decimal_resolution(n) for n in (m['dy'], y_min))
-        m.update({'x':np.round(x_min + m['dx']*m['i'], x_res)})
-        m.update({'y':np.round(y_min + m['dy']*m['j'], y_res)})
+    m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
+    m.update({'j':np.arange(0, max((p[1] - y_min) / m['dy'] for l in m['lines'] for p in l) + 1, dtype=int)})
 
-        m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
-        m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
-
-        # rescale mesh
-        if z == 0:
-            fit_mesh_resolution(m, force_finer)
-
-        z += 1
+    x_res = max(get_decimal_resolution(n) for n in (m['dx'], x_min))
+    y_res = max(get_decimal_resolution(n) for n in (m['dy'], y_min))
+    m.update({'x':np.round(x_min + m['dx']*m['i'], x_res)})
+    m.update({'y':np.round(y_min + m['dy']*m['j'], y_res)})
+    m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
+    m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
 
     find_edges(m)
     calc_bc_relations(m)
@@ -217,36 +211,41 @@ def find_edges(mesh:dict) -> list:
 
 
 
-def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]:
-    """Calculates a mesh resolution (dx, dy) that tiles the mesh with integer elements."""
+def calc_new_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True) -> dict:
+    """Calculates a mesh resolution that tiles the boundary in both dimensions.
+    
+    If the calculated resolution is coarser than the original resolution and
+    force_finer is True, checks whether original resolution works; if not, the
+    calculated resolution is halved until it is <= original resolution.
+    """
 
-    # Does region actually need a 'length' term or can we just reconstruct it with dx or dy?
-    widths_x = [reg['length'] for slc in mesh['regions_x'] for reg in slc]
-    widths_y = [reg['length'] for slc in mesh['regions_y'] for reg in slc]
+    pow_x = max(get_decimal_resolution(pt[0]) for line in lines for pt in line)
+    pow_y = max(get_decimal_resolution(pt[1]) for line in lines for pt in line)
 
-    # calculate scaling order of magnitudes, x and y
-    pow_x = max(get_decimal_resolution(pt[0]) for line in mesh['lines'] for pt in line)
-    pow_y = max(get_decimal_resolution(pt[1]) for line in mesh['lines'] for pt in line)
+    x = np.unique(np.array([p[0] for l in lines for p in l]))
+    y = np.unique(np.array([p[1] for l in lines for p in l]))
 
-    w_scaled_x = [round(w*10**pow_x) for w in widths_x]
-    w_scaled_y = [round(w*10**pow_y) for w in widths_y]
+    if x.size == 2:
+        dx = x[1] - x[0]
+    else:
+        dx = float(np.gcd.reduce(((x[1:] - x[0])*10**pow_x).astype(int))) / 10**pow_x
 
-    dx = float(np.gcd.reduce(w_scaled_x)) / 10**pow_x
-    dy = float(np.gcd.reduce(w_scaled_y)) / 10**pow_y
-
-    while dx > mesh['dx'] and force_finer:
+    while dx > dx0 and force_finer:
         dx /= 2
 
-    while dy > mesh['dy'] and force_finer:
+    if y.size == 2:
+        dy = y[1] - y[0]
+    else:
+        dy = float(np.gcd.reduce(((y[1:] - y[0])*10**pow_y).astype(int))) / 10**pow_y
+
+    while dy > dy0 and force_finer:
         dy /= 2
 
-    print(f"{mesh['label']}, new resolution (dx, dy): {dx, dy}")
-    mesh.update({'dx':dx})
-    mesh.update({'dy':dy})
+    return {'dx':dx, 'dy':dy}
 
 
 
-def update_mesh(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
+def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     """Updates the state of a single mesh over a single timestep via the ADI method."""
 
     # TODO: shorten name to m, directly reference instead of making all these 
@@ -548,7 +547,7 @@ def calc_edge_states(cfg:dict) -> None:
                         flux += q
 
             edge_states.append({'type':state_type, 'values':state_val})
-            fluxes.append(np.sum(flux))
+            fluxes.append(np.sum(flux*edge['areas']) / np.sum(edge['areas']))
             powers.append(np.sum(flux*edge['areas']))
 
         mesh.update({'edge_states':edge_states})
@@ -563,11 +562,7 @@ def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0
     # arrange into ascending order edge
     s = min(bounds[0], bounds[1])
     e = max(bounds[0], bounds[1])
-
-    res = max(get_decimal_resolution(n) for n in (s, e, h))
-    p = np.round(np.arange(s, e + h, h), res)
-    if p[-1] > e:
-        p = np.delete(p, -1)
+    p = np.linspace(s, e, round(abs(s - e) / h + 1))
 
     # planar
     if curvature == 0:
@@ -590,7 +585,7 @@ def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0
         if bounds[2] < 0:
             raise ValueError
 
-        areas = 2*pi*bounds[2]*np.r_[0.5, np.ones(p.size - 2, float), 0.5]
+        areas = 2*pi*bounds[2]*h*np.r_[0.5, np.ones(p.size - 2, float), 0.5]
 
     # reverse area order according to parallel direction
     return areas if e > s else np.flip(areas)
