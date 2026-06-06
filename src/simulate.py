@@ -7,7 +7,7 @@ import numpy as np
 
 from .lumped_capacitor import init_lc
 from .mesh import create_mesh, update_mesh, calc_edge_states
-from .util import update_properties
+from .util import material_properties
 
 
 
@@ -44,10 +44,14 @@ def run_simulation(config:str):
 
     config = {'runtime':runtime}
 
+    # load materials:
+    with open(join(getcwd(), 'src', 'data', 'materials.yaml'), encoding='utf-8') as f:
+        materials = yaml.load(stream=f, Loader=yaml.SafeLoader)
+
     meshes = {}
     if cfg.get('meshes') is not None:
         for key, mesh in cfg['meshes'].items():
-            meshes.update({key:create_mesh(mesh, cfg['force_finer'])})
+            meshes.update({key:create_mesh(mesh, cfg['force_finer'], materials[mesh['material']])})
         config.update({'meshes':meshes})
 
     lumped_capacitors = {}
@@ -70,8 +74,6 @@ def run_simulation(config:str):
     energy_change = 0.0
 
     while t_now < runtime['tf']:
-
-        # calculate timestep
         dt = min(runtime['dt_max'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
                  / np.max(m['k'] / (m['rho']*m['cp'])) for m in meshes.values()))
 
@@ -84,10 +86,13 @@ def run_simulation(config:str):
 
         for m in meshes.values():
             m['u_prev'] = m['u_latest']
+            props = material_properties(m['u_prev'], materials[m['material']])
+            m.update({'k':props['k'],
+                      'cp':props['cp'],
+                      'rho':props['rho'],
+                      'emissivity':props['emissivity']})
 
-            update_properties(m)
             calc_edge_states(cfg=config)
-
             m['u_latest'] = update_mesh(mesh=m,
                                         dt=dt,
                                         curv=m['curvature'],

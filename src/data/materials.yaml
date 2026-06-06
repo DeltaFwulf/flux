@@ -10,7 +10,7 @@ aluminium:
   cp: [683, 797, 859, 902, 949, 1042]
   rho: [2726, 2719, 2710, 2701, 2681, 2639]
   emissivity: 0.1
-  colour: 'lightgrey'
+  default_colour: 'lightgrey'
 
 stainless_steel:
   label: 'Stainless Steel'
@@ -19,7 +19,7 @@ stainless_steel:
   cp: [272, 402, 477, 515, 557, 582, 611, 640, 682]
   rho: [7800, 7800, 7800, 7800, 7800, 7800, 7800, 7800, 7800,]
   emissivity: 0.4 # for 304 stainless steel, 216 to 490 C, after heating
-  colour: 'darkgrey'
+  default_colour: 'darkgrey'
 
 IN_26_firebrick:
   label: 'IN-26 Insulating Firebrick'
@@ -28,7 +28,7 @@ IN_26_firebrick:
   cp: [500, 500, 500, 500]
   rho: [618, 618, 618, 618]
   emissivity: 0.75
-  colour: 'papayawhip'
+  default_colour: 'papayawhip'
 
 graphite:
   label: 'Graphite'
@@ -37,7 +37,7 @@ graphite:
   cp: [1210, 1260, 1314, 1366, 1410, 1448, 1479, 1503, 1518, 1529, 1528, 1523, 1517, 1513, 1500, 1488, 1471, 1452, 1422, 1403]
   rho: [1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780, 1780]
   emissivity: 0.75
-  colour: 'black'
+  default_colour: 'black'
 
 testonium:
   label: 'test material'
@@ -46,4 +46,4 @@ testonium:
   cp: [1000]
   rho: [1000]
   emissivity: 0.75
-  colour: 'magenta'
+  default_colour: 'magenta'

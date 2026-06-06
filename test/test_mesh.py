@@ -5,6 +5,8 @@ import numpy as np
 
 from src.mesh import create_mesh, slice_regions
 
+# TODO: break this down into the sub routines, rather than this high level test at first
+#       (what does it prove?)
 
 
 class MeshTests(unittest.TestCase):
@@ -35,8 +37,16 @@ class MeshTests(unittest.TestCase):
                      {'edge': 2, 'mode': 'neumann', 'value': 0.0},
                      {'edge': 3, 'mode': 'neumann', 'value': 0.0}]})
 
+        testonium = {'label':'test material',
+                     'u':[100.0, 200.0],
+                     'k':[1.0, 2.0],
+                     'cp':[900.0, 1000.0],
+                     'rho':[800.0, 900.0],
+                     'emissivity':0.75,
+                     'default_colour':'magenta'}
+
         # does the mesh have all the expected fields, and are they the correct type?
-        testmesh = create_mesh(mesh_def=mdef, force_finer=True)
+        testmesh = create_mesh(mesh_def=mdef, force_finer=True, material=testonium)
 
         expected = set({'label',
                         'dx', 
@@ -53,6 +63,7 @@ class MeshTests(unittest.TestCase):
                         'k',
                         'rho',
                         'cp',
+                        'emissivity',
                         'regions_x',
                         'regions_y',
                         'edges',

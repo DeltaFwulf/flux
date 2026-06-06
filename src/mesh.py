@@ -1,25 +1,18 @@
 """Contains functions used to manipulate meshes."""
 
-from os import getcwd
-from os.path import join
 from copy import deepcopy
 from math import copysign, pi
 import numpy as np
-import yaml
 
-from .util import update_properties, calc_bc_relations, get_decimal_resolution, calc_face_perimeter
+from .util import calc_bc_relations, get_decimal_resolution, calc_face_perimeter, material_properties
 from .heat_transfer import conduction, convection, radiation
 
 
 
-def create_mesh(mesh_def:dict, force_finer:bool):
+def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     """Prepares a mesh dictionary for simulation."""
 
-    with open(join(getcwd(), 'src', 'data', 'materials.yaml'), encoding='utf-8') as f:
-        materials = yaml.load(stream=f, Loader=yaml.SafeLoader)
-
     m = deepcopy(mesh_def)
-    m.pop('u0')
 
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
@@ -43,13 +36,6 @@ def create_mesh(mesh_def:dict, force_finer:bool):
 
         z += 1
 
-    mat = materials.get(m['material'])
-    if mat is None:
-        print(f"Material {m['material']} is not found at /src/data/materials.yaml.")
-        raise ValueError
-
-    m.update({'material':mat})
-
     find_edges(m)
     calc_bc_relations(m)
 
@@ -60,10 +46,16 @@ def create_mesh(mesh_def:dict, force_finer:bool):
     m.update({'u_prev':m['u'][:, :, -1]})
     m.update({'edge_fluxes':[np.zeros(1, float) for e in range(len(m['edges']))]})
     m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
-
-    update_properties(m)
-
     m.update({'net_energy':np.zeros(1, float)})
+
+    # initialise material properties
+    props = material_properties(m['u_prev'], material)
+    m.update({'k':props['k'],
+              'cp':props['cp'],
+              'rho':props['rho'],
+              'emissivity':props['emissivity']})
+
+    m.pop('u0')
 
     return m
 
@@ -428,7 +420,7 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
         if mode == 'radiation':
             u4_mean = np.sum(link_obj['areas']*u**4) / np.sum(link_obj['areas'])
             link_obj.update({'u4_mean':u4_mean})
-            link_obj.update({'emissivity':mesh['material']['emissivity']})
+            link_obj.update({'emissivity':mesh['emissivity']})
 
         elif mode == 'conduction':
 
@@ -464,7 +456,7 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
 
         if mode == 'radiation':
             link_obj.update({'u4_mean':lc['u_prev']**4})
-            link_obj.update({'emissivity':lc['material']['emissivity']})
+            link_obj.update({'emissivity':lc['emissivity']})
 
     else:
         raise ValueError
@@ -499,7 +491,7 @@ def calc_edge_states(cfg:dict) -> None:
             s, e, n = edge['indices']
             d = sum(edge['direction'])
 
-            edge_link = edge | {'emissivity':mesh['material']['emissivity']}
+            edge_link = edge | {'emissivity':mesh['emissivity']}
 
             # get appropriate slice of temperature, conductivity, etc.
             if edge['direction'][0] == 0: # slice along x axis

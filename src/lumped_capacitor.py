@@ -3,7 +3,7 @@
 from copy import deepcopy
 from math import pi, copysign
 
-from .util import get_material, update_properties, calc_bc_relations
+from .util import get_material, material_properties, calc_bc_relations
 
 
 
@@ -18,7 +18,6 @@ def init_lc(lc_def:dict) -> dict:
     lc.update({'u_prev':lc_def['u0']})
 
     find_edges(lc)
-    update_properties(lc)
     calc_bc_relations(lc)
 
     return lc

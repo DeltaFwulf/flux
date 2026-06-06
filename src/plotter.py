@@ -64,7 +64,7 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 
             u_masked = np.ma.masked_where(masks[k], m['u'][:,:,frame]).transpose()
             ax.plot_surface(xm[k], ym[k], u_masked,
-                            edgecolor=m['material']['colour'],
+                            edgecolor=m['colour'],
                             cmap='magma',
                             norm=norm,
                             alpha=1.0,
@@ -159,7 +159,7 @@ def plot2d_flat(results:dict, **kwargs) -> None:
                 ax_transient.plot(np.array([li[0][0], li[1][0]])*m['dx'],
                                   np.array([li[0][1], li[1][1]])*m['dy'],
                                   linestyle='-',
-                                  color=m['material']['colour'])
+                                  color=m['colour'])
 
         ax_transient.set_aspect('equal')
         ax_transient.set_xlabel('x, m')
