@@ -62,7 +62,7 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 
         for k, m in meshes.items():
 
-            u_masked = np.ma.masked_where(m['mask'], m['u'][:,:,frame]).transpose()
+            u_masked = np.ma.masked_where(masks[k], m['u'][:,:,frame]).transpose()
             ax.plot_surface(xm[k], ym[k], u_masked,
                             edgecolor=m['material']['colour'],
                             cmap='magma',
@@ -92,11 +92,12 @@ def animate_temp_2d(results:dict, **kwargs) -> None:
 
     xm = {}
     ym = {}
-
-    for k in meshes.keys():
-        xk, yk = np.meshgrid(meshes[k]['x'], meshes[k]['y'])
+    masks = {}
+    for k, m in meshes.items():
+        xk, yk = np.meshgrid(m['x'], m['y'])
         xm.update({k:xk})
         ym.update({k:yk})
+        masks.update({k:mask_void_regions(m)})
 
     plt.style.use('dark_background')
     norm = plt.Normalize(u_min, u_max)
@@ -129,13 +130,14 @@ def plot2d_flat(results:dict, **kwargs) -> None:
     plt.style.use('dark_background')
     fig, ax_transient = plt.subplots(layout='compressed')
 
-
     xm = {}
     ym = {}
+    masks = {}
     for k, m in results['meshes'].items():
         xk, yk = np.meshgrid(m['x'], m['y'])
         xm.update({k:xk})
         ym.update({k:yk})
+        masks.update({k:mask_void_regions(m)})
 
 
     def plot_mesh(ax, xm:np.ndarray, ym:np.ndarray, u:np.ndarray):
@@ -150,7 +152,7 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
         for k, m in results['meshes'].items():
 
-            u_masked = np.ma.masked_where(m['mask'], m['u'][:,:,frame]).transpose()
+            u_masked = np.ma.masked_where(masks[k], m['u'][:,:,frame]).transpose()
             plot_mesh(ax_transient, xm[k], ym[k], u_masked)
 
             for li in m['line_indices']:
@@ -217,6 +219,25 @@ def plot_total_powers(results:dict):
 
     fig.tight_layout()
     plt.show()
+
+
+
+def mask_void_regions(mesh:dict) -> np.ndarray:
+    """Masks a mesh's void regions so plotters ignore them.
+    
+    By scanning through all regions in one direction, the 'voids'
+    between different regions can be located and a mask array created
+    for plotters, so that meshes are plotted with clean boundaries.
+    """
+
+    mask = np.zeros((mesh['i'].size, mesh['j'].size,), bool)
+
+    # iterate through all x slices and locate all void regions
+    for j, row in enumerate(mesh['regions_x']):
+        for reg in row:
+            mask[:, j] = [not (reg['bounds'][0] <= i <= reg['bounds'][1]) for i in mesh['i']]
+
+    return mask
 
 
 

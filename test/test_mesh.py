@@ -57,7 +57,6 @@ class MeshTests(unittest.TestCase):
                         'regions_y',
                         'edges',
                         'edge_bcs',
-                        'mask',
                         'edge_fluxes',
                         'edge_powers',
                         'u',

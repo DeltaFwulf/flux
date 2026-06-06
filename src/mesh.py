@@ -52,7 +52,6 @@ def create_mesh(mesh_def:dict, force_finer:bool):
 
     find_edges(m)
     calc_bc_relations(m)
-    mask_void_regions(m)
 
     # Meshes store 'u' for final results, u_latest for use in next timestep, u_prev
     # for use in current timestep.
@@ -252,26 +251,6 @@ def fit_mesh_resolution(mesh:dict, force_finer:bool=True) -> tuple[float, float]
     print(f"{mesh['label']}, new resolution (dx, dy): {dx, dy}")
     mesh.update({'dx':dx})
     mesh.update({'dy':dy})
-
-
-
-def mask_void_regions(mesh:dict) -> np.ndarray:
-    """Masks a mesh's void regions so plotters ignore them.
-    
-    By scanning through all regions in one direction, the 'voids'
-    between different regions can be located and a mask array created
-    for plotters, so that meshes are plotted with clean boundaries.
-    """
-
-    mask = np.zeros((mesh['i'].size, mesh['j'].size,), bool)
-
-    # iterate through all x slices and locate all void regions
-    for j, row in enumerate(mesh['regions_x']):
-        for reg in row:
-            mask[:, j] = [not (reg['bounds'][0] <= i <= reg['bounds'][1]) for i in mesh['i']]
-
-    # update the mesh's 'mask' term
-    mesh.update({'mask':mask})
 
 
 
