@@ -17,6 +17,7 @@ meshes:
     u0: 500
     material: 'testonium'
     curvature: 1
+    depth: 0.1
     
     lines:
     - [[0.01, 0.0], [0.15, 0.0]]

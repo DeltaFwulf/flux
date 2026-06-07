@@ -248,28 +248,24 @@ def calc_new_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True)
 def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     """Updates the state of a single mesh over a single timestep via the ADI method."""
 
-    # TODO: shorten name to m, directly reference instead of making all these 
-    #       pointless local variables
+    # FIXME: steady temperatures not correct in curved meshes
 
-    i_arr = mesh['i']
-    j_arr = mesh['j']
-    dx = mesh['dx']
-    dy = mesh['dy']
-    alpha = mesh['k'] / (mesh['rho']*mesh['cp'])
+    m = mesh
+    alpha = m['k'] / (m['rho']*m['cp'])
 
     # calculate mesh coefficients
-    bxx_c = alpha*dt*(1 - theta) / dx**2
-    bxx_n = alpha*dt*theta / dx**2
-    byy_c = 0 if curv > 1 else (alpha*(1 - theta)*dt / dy**2)
-    byy_n = 0 if curv > 1 else (alpha*theta*dt / dy**2)
-    bx_c = curv*alpha*(1 - theta)*dt / (2*dx)
-    bx_n = curv*alpha*theta*dt / (2*dx)
+    bxx_c = alpha*dt*(1 - theta) / m['dx']**2
+    bxx_n = alpha*dt*theta / m['dx']**2
+    byy_c = 0 if curv > 1 else (alpha*(1 - theta)*dt / m['dy']**2)
+    byy_n = 0 if curv > 1 else (alpha*theta*dt / m['dy']**2)
+    bx_c = curv*alpha*(1 - theta)*dt / (2*m['dx'])
+    bx_n = curv*alpha*theta*dt / (2*m['dx'])
 
-    u_in = mesh['u_prev']
-    u_mid = np.zeros_like(u_in, float)
+    u0 = mesh['u_prev']
+    u_mid = np.zeros_like(u0, float)
 
     # row slices (across x)
-    for j in range(j_arr.size):
+    for j in m['j']:
         for reg in mesh['regions_x'][j]:
 
             s = reg['bounds'][0]
@@ -277,107 +273,102 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
 
             if reg['type'] == 'edge':
 
-                edge = mesh['edges'][reg['line']]
-                edge_state = mesh['edge_states'][reg['line']]
+                es = m['edge_states'][reg['line']]
 
-                if edge_state['type'] == 'direct':
-                    u_mid[s:e+1, j] = edge_state['values']
+                if es['type'] == 'direct':
+                    u_mid[s:e+1, j] = es['values']
                 else:
-                    d_edge = sum(edge['direction'])
-                    u_mid[s:e+1, j] = u_in[s:e+1, j+d_edge] - dy*edge_state['values']*d_edge
+                    d_edge = sum(m['edges'][reg['line']]['direction'])
+                    u_mid[s:e+1, j] = u0[s:e+1, j+d_edge] - m['dy']*es['values']*d_edge
 
                 continue
 
-            line_s = reg['line_s']
-            line_e = reg['line_e']
-            type_s = mesh['edge_states'][line_s]['type']
-            type_e = mesh['edge_states'][line_e]['type']
-            val_s = mesh['edge_states'][line_s]['values'][j - mesh['edges'][line_s]['indices'][0]]
-            val_e = mesh['edge_states'][line_e]['values'][j - mesh['edges'][line_e]['indices'][0]]
+            ts = m['edge_states'][reg['line_s']]['type']
+            te = m['edge_states'][reg['line_e']]['type']
+            vs = m['edge_states'][reg['line_s']]['values'][m['edges'][reg['line_s']]['indices'][0]]
+            ve = m['edge_states'][reg['line_e']]['values'][m['edges'][reg['line_s']]['indices'][0]]
 
-            a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / (dx*i_arr[s+1:e]), 0.0 if\
-                        type_e == 'direct' else -1.0]
+            a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / (m['dx']*m['i'][s+1:e]), 0.0 if\
+                        te== 'direct' else -1.0]
 
-            b = np.r_[1.0 if type_s == 'direct' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
+            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
 
-            c = np.r_[0.0 if type_s == 'direct' else 1.0, -bxx_n[s+2:e+1,j] -\
-                        bx_n[s+2:e+1,j] / (dx*i_arr[s+1:e]), 0.0]
+            c = np.r_[0.0 if ts == 'direct' else 1.0, -bxx_n[s+2:e+1,j] -\
+                        bx_n[s+2:e+1,j] / (m['dx']*m['i'][s+1:e]), 0.0]
 
-            d = np.r_[val_s if type_s == 'direct' else dx*val_s,\
+            d = np.r_[vs*(1 if ts == 'direct' else m['dx']),\
 
-                        byy_c[s+1:e,j-1]*u_in[s+1:e,j-1] +\
-                        (1 - 2*byy_c[s+1:e,j])*u_in[s+1:e,j] +\
-                        byy_c[s+1:e,j+1]*u_in[s+1:e,j+1],\
+                        byy_c[s+1:e,j-1]*u0[s+1:e,j-1] +\
+                        (1 - 2*byy_c[s+1:e,j])*u0[s+1:e,j] +\
+                        byy_c[s+1:e,j+1]*u0[s+1:e,j+1],\
 
-                        val_e if type_e == 'direct' else dx*val_e]
+                        ve*(1 if te == 'direct' else m['dx'])]
 
-            u_mid[s:e+1,j] = tdma(u_in[s:e+1,j], a, b, c, d)
+            u_mid[s:e+1,j] = tdma(a, b, c, d)
+            # u_mid[s:e+1, j] = spsolve(diags([a[1:], b, c[:-1]], [-1, 0, 1]).tocsr(), d)
 
     # column slices (across y)
     u_out = u_mid
-    for i in range(i_arr.size):
-        for reg in mesh['regions_y'][i]:
+    for i in m['i']:
+        for reg in m['regions_y'][i]:
 
-            s = np.where(j_arr == reg['bounds'][0])[0][0]
-            e = np.where(j_arr == reg['bounds'][1])[0][0]
+            s = reg['bounds'][0]
+            e = reg['bounds'][1]
 
             if reg['type'] == 'edge':
+                es = m['edge_states'][reg['line']]
 
-                edge = mesh['edges'][reg['line']]
-                edge_state = mesh['edge_states'][reg['line']]
-
-                if edge_state['type'] == 'direct':
-                    u_mid[i, s:e+1] = edge_state['values']
+                if es['type'] == 'direct':
+                    u_out[i, s:e+1] = es['values']
                 else:
-                    d_edge = sum(edge['direction'])
-                    u_mid[i, s:e+1] = u_in[i+d_edge, s:e+1] - dx*edge_state['values']*d_edge
+                    d_edge = sum(m['edges'][reg['line']]['direction'])
+                    u_out[i, s:e+1] = u0[i+d_edge, s:e+1] - m['dx']*es['values']*d_edge
 
                 continue
 
-            line_s = reg['line_s']
-            line_e = reg['line_e']
-            type_s = mesh['edge_states'][line_s]['type']
-            type_e = mesh['edge_states'][line_e]['type']
-            val_s = mesh['edge_states'][line_s]['values'][i - mesh['edges'][line_s]['indices'][0]]
-            val_e = mesh['edge_states'][line_e]['values'][i - mesh['edges'][line_e]['indices'][0]]
+            ts = m['edge_states'][reg['line_s']]['type']
+            te = m['edge_states'][reg['line_e']]['type']
+            vs = m['edge_states'][reg['line_s']]['values'][m['edges'][reg['line_s']]['indices'][0]]
+            ve = m['edge_states'][reg['line_e']]['values'][m['edges'][reg['line_s']]['indices'][0]]
 
-            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if type_e == 'direct' else -1.0]
+            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if te == 'direct' else -1.0]
 
-            b = np.r_[1.0 if type_s == 'direct' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
+            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
 
-            c = np.r_[0.0 if type_s == 'direct' else 1.0, -byy_n[i,s+2:e+1], 0.0]
+            c = np.r_[0.0 if ts == 'direct' else 1.0, -byy_n[i,s+2:e+1], 0.0]
 
-            d = np.r_[val_s if type_s == 'direct' else dy*val_s,\
+            d = np.r_[vs*(1 if ts == 'direct' else m['dy']),\
 
-                (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / (dx*i_arr[i]))*u_mid[i+1,s+1:e] +\
+                (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / (m['dx']*i))*u_mid[i+1,s+1:e] +\
                 (1 - 2*bxx_c[i,s+1:e])*u_mid[i,s+1:e] +\
-                (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / (dx*i_arr[i]))*u_mid[i-1,s+1:e],
+                (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / (m['dx']*i))*u_mid[i-1,s+1:e],
 
-                val_e if type_e == 'direct' else dy*val_e]
+                ve*(1 if te == 'direct' else m['dy'])]
 
-            u_out[i,s:e+1] = tdma(u_mid[i,s:e+1], a, b, c, d)
+            u_out[i,s:e+1] = tdma(a, b, c, d)
+            # u_out[i, s:e+1] = spsolve(diags([a[1:], b, c[:-1]], [-1, 0, 1]).tocsr(), d)
 
     return u_out
 
 
 
-def tdma(x, a, b, c, d) -> np.ndarray:
+def tdma(a, b, c, d) -> np.ndarray:
     """Solves for x given a tridiagonal matrix, following Thomas' Algorithm."""
 
+    # NOTE: yes, I am aware of scipy.sparse.linalg.spsolve; it was slower for this
+    #       implementation :)
+
     # forward substitution
-    p = np.zeros_like(x, float)
-    q = np.zeros_like(x, float)
+    p = np.r_[-c[0] / b[0], np.zeros((d.size - 1), float)]
+    q = np.r_[d[0] / b[0], np.zeros((d.size - 1), float)]
 
-    p[0] = -c[0] / b[0]
-    q[0] = d[0] / b[0]
-
-    for i in range(1, x.size):
+    for i in range(1, d.size):
         dn = b[i] + a[i]*p[i - 1]
         p[i] = - c[i] / dn
         q[i] = (d[i] - a[i]*q[i - 1]) / dn
 
     # back substitution for x
-    x[-1] = q[-1]
+    x = np.r_[np.zeros((d.size - 1), float), q[-1]]
     for i in range(x.size - 2, -1, -1):
         x[i] = p[i]*x[i + 1] + q[i]
 
