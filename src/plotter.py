@@ -185,7 +185,7 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 def plot_total_powers(results:dict):
     """Temporary plotter for mesh total powers."""
     
-    # TODO: make grid lines thinner 
+    # TODO: make grid lines thinner
 
     fig, axs = plt.subplots(2, 2)
     ax_pwr = axs[0, 0]
@@ -229,6 +229,35 @@ def plot_total_powers(results:dict):
     ax_flux.grid(True)
 
     fig.tight_layout()
+    plt.show()
+
+
+def plot_steady_slice(results:dict) -> None:
+    """Plots the pipe's final temperature distribution.
+
+    This is compared to the theoretical final temperature distribution
+    to evaluate the simulation's accuracy.
+    
+    ONLY to be used with the pipe.yaml case!!!
+    """
+
+    fig, ax = plt.subplots()
+
+    for k, m in results['meshes'].items():
+
+        u_slice = m['u'][:, :, -1]
+        u_slice = u_slice[:, np.shape(u_slice)[1] // 2]
+        du = u_slice[0] - u_slice[-1]
+        u_cyl = u_slice[0] - du*np.log(m['x'] / m['x'][0]) / np.log(m['x'][-1] / m['x'][0])
+
+        ax.plot(m['x'], u_slice, '-', label=k + ' ADI')
+        ax.plot(m['x'], u_cyl, '--', label=k + ' Theoretical')
+
+    ax.legend()
+    ax.grid(True)
+    ax.set_xlabel("Radius, m")
+    ax.set_ylabel("Temperature, K")
+    ax.set_title("Temperature vs Radius (simulation vs theory)")
     plt.show()
 
 

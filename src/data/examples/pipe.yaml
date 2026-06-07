@@ -12,7 +12,7 @@ meshes:
   pipe:
     label: 'pipe'
     colour: 'grey'
-    dx: 0.01
+    dx: 0.002
     dy: 0.5
     u0: 500
     material: 'testonium'

@@ -10,14 +10,17 @@ from .heat_transfer import conduction, convection, radiation
 
 
 def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
-    """Prepares a mesh dictionary for simulation."""
+    """Prepares a mesh dictionary for simulation.
+    
+    an explanation of meshes can be found here: 
+    https://github.com/DeltaFwulf/flux/wiki/Meshes"""
 
     m = deepcopy(mesh_def)
 
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
 
-    # fix mesh resolution
+    # set (dx, dy) so all lines lie on the grid
     m = m | calc_new_resolution(m['lines'], m['dx'], m['dy'], force_finer)
 
     m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
@@ -30,11 +33,10 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
     m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
 
+    # FIXME: change function interfaces, do not give mesh as argument, dummy
     find_edges(m)
     calc_bc_relations(m)
 
-    # Meshes store 'u' for final results, u_latest for use in next timestep, u_prev
-    # for use in current timestep.
     m.update({'u':np.zeros((m['i'].size, m['j'].size, 1), float) + mesh_def['u0']})
     m.update({'u_latest':m['u'][:, :, -1]})
     m.update({'u_prev':m['u'][:, :, -1]})
@@ -42,7 +44,6 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
     m.update({'net_energy':np.zeros(1, float)})
 
-    # initialise material properties
     props = material_properties(m['u_prev'], material)
     m.update({'k':props['k'],
               'cp':props['cp'],
@@ -248,18 +249,20 @@ def calc_new_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True)
 def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     """Updates the state of a single mesh over a single timestep via the ADI method."""
 
-    # FIXME: steady temperatures not correct in curved meshes
-
     m = mesh
     alpha = m['k'] / (m['rho']*m['cp'])
 
     # calculate mesh coefficients
+    # TODO: store betas separate from alpha, use constant values (a: memory efficient)
+    # (b: it's what the equations state)
+
+    # XXX: should beta dt term be halved?
+    bx_c = curv*alpha*(1 - theta)*dt / (2*m['dx'])
+    bx_n = curv*alpha*theta*dt / (2*m['dx'])
     bxx_c = alpha*dt*(1 - theta) / m['dx']**2
     bxx_n = alpha*dt*theta / m['dx']**2
     byy_c = 0 if curv > 1 else (alpha*(1 - theta)*dt / m['dy']**2)
     byy_n = 0 if curv > 1 else (alpha*theta*dt / m['dy']**2)
-    bx_c = curv*alpha*(1 - theta)*dt / (2*m['dx'])
-    bx_n = curv*alpha*theta*dt / (2*m['dx'])
 
     u0 = mesh['u_prev']
     u_mid = np.zeros_like(u0, float)
@@ -285,16 +288,16 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
 
             ts = m['edge_states'][reg['line_s']]['type']
             te = m['edge_states'][reg['line_e']]['type']
-            vs = m['edge_states'][reg['line_s']]['values'][m['edges'][reg['line_s']]['indices'][0]]
-            ve = m['edge_states'][reg['line_e']]['values'][m['edges'][reg['line_s']]['indices'][0]]
+            vs = m['edge_states'][reg['line_s']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
+            ve = m['edge_states'][reg['line_e']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
 
-            a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / (m['dx']*m['i'][s+1:e]), 0.0 if\
+            a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / m['x'][s+1:e], 0.0 if\
                         te== 'direct' else -1.0]
 
             b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
 
             c = np.r_[0.0 if ts == 'direct' else 1.0, -bxx_n[s+2:e+1,j] -\
-                        bx_n[s+2:e+1,j] / (m['dx']*m['i'][s+1:e]), 0.0]
+                        bx_n[s+2:e+1,j] / m['x'][s+1:e], 0.0]
 
             d = np.r_[vs*(1 if ts == 'direct' else m['dx']),\
 
@@ -305,7 +308,6 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
                         ve*(1 if te == 'direct' else m['dx'])]
 
             u_mid[s:e+1,j] = tdma(a, b, c, d)
-            # u_mid[s:e+1, j] = spsolve(diags([a[1:], b, c[:-1]], [-1, 0, 1]).tocsr(), d)
 
     # column slices (across y)
     u_out = u_mid
@@ -328,8 +330,8 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
 
             ts = m['edge_states'][reg['line_s']]['type']
             te = m['edge_states'][reg['line_e']]['type']
-            vs = m['edge_states'][reg['line_s']]['values'][m['edges'][reg['line_s']]['indices'][0]]
-            ve = m['edge_states'][reg['line_e']]['values'][m['edges'][reg['line_s']]['indices'][0]]
+            vs = m['edge_states'][reg['line_s']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
+            ve = m['edge_states'][reg['line_e']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
 
             a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if te == 'direct' else -1.0]
 
@@ -339,14 +341,13 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
 
             d = np.r_[vs*(1 if ts == 'direct' else m['dy']),\
 
-                (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / (m['dx']*i))*u_mid[i+1,s+1:e] +\
+                (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / m['x'][i])*u_mid[i+1,s+1:e] +\
                 (1 - 2*bxx_c[i,s+1:e])*u_mid[i,s+1:e] +\
-                (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / (m['dx']*i))*u_mid[i-1,s+1:e],
+                (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / m['x'][i])*u_mid[i-1,s+1:e],
 
                 ve*(1 if te == 'direct' else m['dy'])]
 
             u_out[i,s:e+1] = tdma(a, b, c, d)
-            # u_out[i, s:e+1] = spsolve(diags([a[1:], b, c[:-1]], [-1, 0, 1]).tocsr(), d)
 
     return u_out
 
@@ -578,5 +579,5 @@ def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0
 
         areas = 2*pi*bounds[2]*h*np.r_[0.5, np.ones(p.size - 2, float), 0.5]
 
-    # reverse area order according to parallel direction
+    # ensure element areas for elements in ascending order
     return areas if e > s else np.flip(areas)
