@@ -6,7 +6,7 @@ from math import pi
 import numpy as np
 from numpy.testing import assert_allclose
 
-from src.mesh import calc_areas
+from src.mesh import edge_area
 
 
 
@@ -21,7 +21,7 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 0
         depth = 1.0
         expected = np.r_[0.5, np.ones(8, float), 0.5]
-        assert_allclose(calc_areas(bounds, h, normal, curvature, depth), expected, atol=1e-6)
+        assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
 
 
     def test_planar_horizontal(self):
@@ -33,7 +33,7 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 0
         depth = 1.0
         expected = np.r_[0.5, np.ones(8, float), 0.5]
-        assert_allclose(calc_areas(bounds, h, normal, curvature, depth), expected, atol=1e-6)
+        assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
 
 
     def test_planar_neg_norm(self):
@@ -45,7 +45,7 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 0
         depth = 1.0
         expected = np.r_[0.5, np.ones(8, float), 0.5]
-        assert_allclose(calc_areas(bounds, h, normal, curvature, depth), expected, atol=1e-6)
+        assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
 
 
     def test_planar_neg_bounds(self):
@@ -56,18 +56,18 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 0
         depth = 1.0
         expected = np.r_[0.5, np.ones(8, float), 0.5]
-        assert_allclose(calc_areas(bounds, h, normal, curvature, depth), expected, atol=1e-6)
+        assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
 
 
-    def test_planar_reverse_bounds(self):
-        """check that s > e bounds does not affect results."""
-        bounds = (10.0, 1.0, 0.0)
-        h = 1.0
-        normal = (1.0, 0.0)
-        curvature = 0
-        depth = 1.0
-        expected = np.r_[0.5, np.ones(8, float), 0.5]
-        assert_allclose(calc_areas(bounds, h, normal, curvature, depth), expected, atol=1e-6)
+    # def test_planar_reverse_bounds(self):
+    #     """check that s > e bounds does not affect results."""
+    #     bounds = (10.0, 1.0, 0.0)
+    #     h = 1.0
+    #     normal = (1.0, 0.0)
+    #     curvature = 0
+    #     depth = 1.0
+    #     expected = np.r_[0.5, np.ones(8, float), 0.5]
+    #     assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
 
 
     def test_curved_horizontal(self):
@@ -83,7 +83,23 @@ class MeshAreaTests(unittest.TestCase):
                              31.415926535897,
                              18.064157758141])
 
-        assert_allclose(calc_areas(bounds, h, normal, curvature), expected, atol=1e-6)
+        assert_allclose(edge_area(bounds, h, normal, curvature), expected, atol=1e-6)
+
+
+    def test_curved_horizontal_reverse(self):
+        """Areas should match elements in reverse order."""
+        bounds = (6.0, 2.0, 0.0)
+        h = 1.0
+        normal = (0.0, 1.0)
+        curvature = 1
+
+        expected = np.array([18.064157758141,
+                             31.415926535897,
+                             25.132741228718,
+                             18.849555921538,
+                             7.06858347057703])
+
+        assert_allclose(edge_area(bounds, h, normal, curvature), expected, atol=1e-6)
 
 
     def test_curved_horizontal_neg_radius(self):
@@ -95,7 +111,7 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 1
 
         with self.assertRaises(ValueError):
-            calc_areas(bounds, h, normal, curvature)
+            edge_area(bounds, h, normal, curvature)
 
 
     def test_curved_vertical(self):
@@ -107,7 +123,7 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 1
 
         expected = 2*pi*h*np.r_[0.5, np.ones(7), 0.5]
-        assert_allclose(calc_areas(bounds, h, normal, curvature), expected)
+        assert_allclose(edge_area(bounds, h, normal, curvature), expected)
 
 
     def test_curved_vertical_neg_radius(self):
@@ -119,7 +135,7 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 1
 
         with self.assertRaises(ValueError):
-            calc_areas(bounds, h, normal, curvature)
+            edge_area(bounds, h, normal, curvature)
 
 
     def test_array_length(self):
@@ -130,4 +146,4 @@ class MeshAreaTests(unittest.TestCase):
         normal = (1.0, 0.0)
         curvature = 1
 
-        self.assertEqual(calc_areas(bounds, h, normal, curvature).size, 17)
+        self.assertEqual(edge_area(bounds, h, normal, curvature).size, 17)

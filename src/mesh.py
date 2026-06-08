@@ -33,15 +33,14 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
     m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
 
-    # FIXME: change function interfaces, do not give mesh as argument, dummy
     find_edges(m)
     calc_bc_relations(m)
 
     m.update({'u':np.zeros((m['i'].size, m['j'].size, 1), float) + mesh_def['u0']})
     m.update({'u_latest':m['u'][:, :, -1]})
     m.update({'u_prev':m['u'][:, :, -1]})
-    m.update({'edge_fluxes':[np.zeros(1, float) for e in range(len(m['edges']))]})
     m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
+    m.update({'edge_powers_latest':[np.zeros(1, float) for e in range(len(m['edges']))]})
     m.update({'net_energy':np.zeros(1, float)})
 
     props = material_properties(m['u_prev'], material)
@@ -115,8 +114,8 @@ def slice_regions(direction:str, xp:np.ndarray, xn:float, lines:list) -> list[di
 
     for t, trans in enumerate(transitions[1:], start=1):
         trans_prev = transitions[t - 1]
-        bnd_a = int((trans_prev['p'] - xp[0]) / abs(xp[1] - xp[0]))
-        bnd_b = int((trans['p'] - xp[0]) / abs(xp[1] - xp[0]))
+        bnd_a = round((trans_prev['p'] - xp[0]) / abs(xp[1] - xp[0]))
+        bnd_b = round((trans['p'] - xp[0]) / abs(xp[1] - xp[0]))
 
         reg = {'bounds':(bnd_a, bnd_b)}
         reg.update({'length':abs(trans['p'] - trans_prev['p'])})
@@ -165,7 +164,7 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'hp':mesh['dx']})
                 edge.update({'hn':mesh['dy']})
 
-                edge.update({'areas':calc_areas(edge['bounds'],
+                edge.update({'areas':edge_area(edge['bounds'],
                                                 edge['hp'],
                                                 edge['direction'],
                                                 mesh['curvature'],
@@ -193,7 +192,7 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'hp':mesh['dy']})
                 edge.update({'hn':mesh['dx']})
 
-                edge.update({'areas':calc_areas(edge['bounds'],
+                edge.update({'areas':edge_area(edge['bounds'],
                                                 edge['hp'],
                                                 edge['direction'],
                                                 mesh['curvature'],
@@ -253,10 +252,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
     alpha = m['k'] / (m['rho']*m['cp'])
 
     # calculate mesh coefficients
-    # TODO: store betas separate from alpha, use constant values (a: memory efficient)
-    # (b: it's what the equations state)
-
-    # XXX: should beta dt term be halved?
+    # TODO: separate beta from alpha coefficients
     bx_c = curv*alpha*(1 - theta)*dt / (2*m['dx'])
     bx_n = curv*alpha*theta*dt / (2*m['dx'])
     bxx_c = alpha*dt*(1 - theta) / m['dx']**2
@@ -324,7 +320,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
                     u_out[i, s:e+1] = es['values']
                 else:
                     d_edge = sum(m['edges'][reg['line']]['direction'])
-                    u_out[i, s:e+1] = u0[i+d_edge, s:e+1] - m['dx']*es['values']*d_edge
+                    u_out[i, s:e+1] = u_mid[i+d_edge, s:e+1] - m['dx']*es['values']*d_edge
 
                 continue
 
@@ -474,8 +470,6 @@ def calc_edge_states(cfg:dict) -> None:
     for mesh in cfg['meshes'].values():
 
         edge_states = []
-        fluxes = []
-        powers = []
 
         for l, edge in enumerate(mesh['edges']):
 
@@ -496,8 +490,7 @@ def calc_edge_states(cfg:dict) -> None:
                 edge_link.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
 
             state_val = np.zeros((e - s + 1), float)
-            flux = 0.0
-
+           
             for bc in mesh['edge_bcs'][l]:
 
                 boundary_condition = mesh['boundary_conditions'][bc]
@@ -506,21 +499,17 @@ def calc_edge_states(cfg:dict) -> None:
                     case 'dirichlet':
                         state_type = 'direct'
                         state_val += boundary_condition['value']
-                        du = boundary_condition['value'] - edge_link['u_in']
-                        flux = edge_link['k_bar']*du / edge_link['hn']
                         break
 
                     case 'neumann':
                         state_type = 'gradient'
                         state_val += boundary_condition['value']
-                        flux = -sum(edge_link['direction'])*edge_link['k_bar']*state_val
                         break
 
                     case 'conduction':
                         state_type = 'direct'
                         pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         edge_state = conduction(edge_link, pair_link)
-                        flux = edge_state['q']
                         state_val = edge_state['u_int']
                         break
 
@@ -529,32 +518,24 @@ def calc_edge_states(cfg:dict) -> None:
                         pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         q = convection(edge_link, pair_link)
                         state_val -= sum(edge['direction'])*q / edge_link['k_bar']
-                        flux += q
 
                     case 'radiation':
                         state_type = 'gradient'
                         pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         q = radiation(edge_link, pair_link)
                         state_val -= sum(edge['direction'])*q / edge_link['k_bar']
-                        flux += q
 
             edge_states.append({'type':state_type, 'values':state_val})
-            fluxes.append(np.sum(flux*edge['areas']) / np.sum(edge['areas']))
-            powers.append(np.sum(flux*edge['areas']))
 
         mesh.update({'edge_states':edge_states})
-        mesh.update({'edge_fluxes_latest':fluxes})
-        mesh.update({'edge_powers_latest':powers})
 
 
 
-def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0.0) -> np.ndarray:
+def edge_area(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0.0) -> np.ndarray:
     """Calculates the surface area of mesh edge face elements."""
 
-    # arrange into ascending order edge
-    s = min(bounds[0], bounds[1])
-    e = max(bounds[0], bounds[1])
-    p = np.linspace(s, e, round(abs(s - e) / h + 1))
+    s, e = bounds[:2]
+    p = np.linspace(min(s, e), max(s, e), round(abs(s - e) / h + 1))
 
     # planar
     if curvature == 0:
@@ -581,3 +562,40 @@ def calc_areas(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0
 
     # ensure element areas for elements in ascending order
     return areas if e > s else np.flip(areas)
+
+
+
+def edge_gradient(u:np.ndarray, edge:dict) -> np.ndarray:
+    """Calculates a 2nd order approximation to temperature gradient.
+    
+    Using central differencing, the temperature gradient of the mesh's
+    first inboard station (one in from an edge) is estimated with 2nd
+    order accuracy. This is to be used for more accurate boundary flux
+    approximations.
+    """
+
+    s, e, n = edge['indices']
+    n_in = n + 2*sum(edge['direction'])
+
+    u_edge = u[s:e+1, n] if edge['direction'][0] == 0 else u[n, s:e+1]
+    u_in = u[s:e+1, n_in] if edge['direction'][0] == 0 else u[n_in, s:e+1]
+
+    return sum(edge['direction'])*(u_in - u_edge) / (2*edge['hn'])
+
+
+
+def edge_power(u:np.ndarray, k:np.ndarray, edge:dict, curvature:int) -> float:
+    """Estimates the thermal power flowing through an edge.
+
+    Positive values represent flows into the mesh, negative
+    flows out, regardless of edge direction."""
+
+    s, e, n = edge['indices']
+    d = sum(edge['direction'])
+
+    bn = edge['bounds'][2] + d*edge['hn']
+    sf = (bn / edge['bounds'][2]) if (edge['direction'][1] == 0 and curvature == 1) else 1
+    areas = sf*edge['areas']
+    fluxes = edge_gradient(u, edge)*(k[s:e+1, n+d] if edge['direction'][0] == 0 else k[n+d, s:e+1])
+
+    return -d*np.sum(fluxes*areas)

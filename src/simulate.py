@@ -6,8 +6,10 @@ import yaml
 import numpy as np
 
 from .lumped_capacitor import init_lc
-from .mesh import create_mesh, calc_temperature, calc_edge_states
+from .mesh import create_mesh, calc_temperature, calc_edge_states, edge_power
 from .util import material_properties
+
+# FIXME: powers updated one timestep off simulation, fix if possible
 
 
 
@@ -85,6 +87,13 @@ def run_simulation(config:str):
             t = np.hstack((t, t_now))
 
         for m in meshes.values():
+
+            m['edge_powers_latest'] = np.zeros(len(m['edges']), float)
+            for l, edge in enumerate(m['edges']):
+                m['edge_powers_latest'][l] = edge_power(m['u_latest'], m['k'], edge, m['curvature'])
+
+            energy_change += dt*sum(m['edge_powers_latest'])
+
             m['u_prev'] = m['u_latest']
             props = material_properties(m['u_prev'], materials[m['material']])
             m.update({'k':props['k'],
@@ -98,13 +107,11 @@ def run_simulation(config:str):
                                         curv=m['curvature'],
                                         theta=runtime['theta'])
 
-            energy_change += dt*sum(m['edge_powers_latest'])
-
             if store:
                 m['u'] = np.dstack((m['u'], m['u_latest']))
 
                 for e in range(len(m['edges'])):
-                    m['edge_fluxes'][e] = np.append(m['edge_fluxes'][e],m['edge_fluxes_latest'][e])
+                    # m['edge_fluxes'][e] = np.append(m['edge_fluxes'][e],m['edge_fluxes_latest'][e])
                     m['edge_powers'][e] = np.append(m['edge_powers'][e],m['edge_powers_latest'][e])
 
                 m['net_energy'] = np.append(m['net_energy'], energy_change)

@@ -12,8 +12,8 @@ meshes:
   pipe:
     label: 'pipe'
     colour: 'grey'
-    dx: 0.002
-    dy: 0.5
+    dx: 0.003
+    dy: 0.2
     u0: 500
     material: 'testonium'
     curvature: 1
@@ -31,8 +31,8 @@ meshes:
     - {edge: 1, mode: 'dirichlet', value: 300.0}
     - {edge: 2, mode: 'neumann', value: 0.0}
     # - {edge: 3, mode: 'convection', link: 'hot_air'}
-    - {edge: 3, mode: 'dirichlet', value: 500.0}
-
+    # - {edge: 3, mode: 'dirichlet', value: 500.0}
+    - {edge: 3, mode: 'radiation', link: 'radiator'}
 
 environment:
 
@@ -49,3 +49,7 @@ environment:
     pressure: 100000
     phase: 'gas'
     velocity: 0.0
+
+  radiator:
+    temperature: 800.0
+    emissivity: 1.0
