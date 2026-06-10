@@ -73,7 +73,8 @@ class MeshTests(unittest.TestCase):
                         'u',
                         'u_prev',
                         'u_latest',
-                        'net_energy'})
+                        'mass',
+                        'enthalpy'})
 
         self.assertSetEqual(set(testmesh.keys()), expected)
 
@@ -140,3 +141,13 @@ class MeshTests(unittest.TestCase):
         expected = [{'bounds':(0, 10), 'length':1.0, 'type':'internal', 'line_s':0, 'line_e':2}]
 
         self.assertSequenceEqual(slice_regions(direction, xp, xn, lines), expected)
+
+
+    def test_mass_planar(self):
+        """Mass equals initial mean density*volume"""
+        pass
+
+
+    def test_mass_curved(self):
+        """Mass = 2*pi*CSA"""
+        pass

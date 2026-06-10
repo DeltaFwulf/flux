@@ -6,7 +6,7 @@ from math import pi
 import numpy as np
 from numpy.testing import assert_allclose
 
-from src.mesh import edge_area
+from src.mesh import edge_area, volume
 
 
 
@@ -57,17 +57,6 @@ class MeshAreaTests(unittest.TestCase):
         depth = 1.0
         expected = np.r_[0.5, np.ones(8, float), 0.5]
         assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
-
-
-    # def test_planar_reverse_bounds(self):
-    #     """check that s > e bounds does not affect results."""
-    #     bounds = (10.0, 1.0, 0.0)
-    #     h = 1.0
-    #     normal = (1.0, 0.0)
-    #     curvature = 0
-    #     depth = 1.0
-    #     expected = np.r_[0.5, np.ones(8, float), 0.5]
-    #     assert_allclose(edge_area(bounds, h, normal, curvature, depth), expected, atol=1e-6)
 
 
     def test_curved_horizontal(self):
@@ -147,3 +136,61 @@ class MeshAreaTests(unittest.TestCase):
         curvature = 1
 
         self.assertEqual(edge_area(bounds, h, normal, curvature).size, 17)
+
+
+
+class MeshVolTests(unittest.TestCase):
+    """Check that volumes are calculated correctly."""
+
+
+    def test_block(self):
+        """check planar mesh elemental volumes."""
+
+        x = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+        dy = 0.25
+
+        reg_x = [
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':-1, 'line':2}],
+        ]
+
+        vol = volume(reg_x, x, dy, curvature=0, depth=3.0)
+
+        # corner
+        self.assertEqual(vol[0, 0], 0.046875)
+        # edge
+        self.assertEqual(vol[0, 1], 0.09375)
+        # internal
+        self.assertEqual(vol[1, 1], 0.1875)
+        # total volume
+        self.assertEqual(np.sum(vol), 3.0)
+
+
+    def test_cylinder(self):
+        """check cylindrical mesh elemental volumes."""
+
+        x = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+        dy = 0.25
+
+        reg_x = [
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':-1, 'line':2}],
+        ]
+
+        vol = volume(reg_x, x, dy, curvature=1)
+
+        # corner
+        self.assertEqual(vol[0, 0], 0.006135923151542565)
+        # edges
+        self.assertEqual(vol[0, 1], 0.01227184630308513)
+        self.assertEqual(vol[1, 0], 0.04908738521234052)
+        # internal
+        self.assertEqual(vol[1, 1], 0.09817477042468104)
+        # total volume
+        self.assertEqual(np.sum(vol), 3.141592653589793)

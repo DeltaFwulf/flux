@@ -1,7 +1,7 @@
 # Simulate a solid cylinder with dirichlet boundary condition at outer face
 
 
-tf: 30000
+tf: 30000.0
 dt_storage: 300.0
 dt_max: 20.0
 theta: 0.5
@@ -31,8 +31,8 @@ meshes:
     - {edge: 1, mode: 'dirichlet', value: 300.0}
     - {edge: 2, mode: 'neumann', value: 0.0}
     # - {edge: 3, mode: 'convection', link: 'hot_air'}
-    # - {edge: 3, mode: 'dirichlet', value: 500.0}
-    - {edge: 3, mode: 'radiation', link: 'radiator'}
+    - {edge: 3, mode: 'dirichlet', value: 500.0}
+    # - {edge: 3, mode: 'radiation', link: 'radiator'}
 
 environment:
 

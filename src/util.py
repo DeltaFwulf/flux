@@ -38,6 +38,8 @@ def material_properties(temp, material:dict) -> None:
 def calc_bc_relations(solid:dict):
     """Returns a list of boundary condition indices relevant to each edge in a mesh."""
 
+    # TODO: only pass in boundary conditions, the edges is just the largest number in
+    # the list; alternatively, just give the number of edges to the function
     edge_bcs = []
     for l in range(len(solid['edges'])):
 

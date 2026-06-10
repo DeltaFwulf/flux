@@ -41,13 +41,17 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     m.update({'u_prev':m['u'][:, :, -1]})
     m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
     m.update({'edge_powers_latest':[np.zeros(1, float) for e in range(len(m['edges']))]})
-    m.update({'net_energy':np.zeros(1, float)})
 
     props = material_properties(m['u_prev'], material)
     m.update({'k':props['k'],
               'cp':props['cp'],
               'rho':props['rho'],
               'emissivity':props['emissivity']})
+
+    # vol = (m['depth'] if m['curvature'] == 0 else 2*pi)*cross_section(m['regions_x'], m['dy'])
+    vol = volume(m['regions_x'], m['x'], m['dy'], m['curvature'], m.get('depth'))
+    m.update({'mass':m['rho']*vol})
+    m.update({'enthalpy':np.sum(m['mass']*m['cp']*m['u_prev'])})
 
     m.pop('u0')
 
@@ -251,12 +255,12 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
     m = mesh
     alpha = m['k'] / (m['rho']*m['cp'])
 
-    # calculate mesh coefficients
-    # TODO: separate beta from alpha coefficients
+    # TODO: separate beta from alpha coefficients, making betas floats
     bx_c = curv*alpha*(1 - theta)*dt / (2*m['dx'])
     bx_n = curv*alpha*theta*dt / (2*m['dx'])
     bxx_c = alpha*dt*(1 - theta) / m['dx']**2
     bxx_n = alpha*dt*theta / m['dx']**2
+    # TODO: by restricting curv <= 1, this is not necessary
     byy_c = 0 if curv > 1 else (alpha*(1 - theta)*dt / m['dy']**2)
     byy_n = 0 if curv > 1 else (alpha*theta*dt / m['dy']**2)
 
@@ -490,7 +494,7 @@ def calc_edge_states(cfg:dict) -> None:
                 edge_link.update({'k_bar':0.5*(mesh['k'][n, s:e+1] + mesh['k'][n+d, s:e+1])})
 
             state_val = np.zeros((e - s + 1), float)
-           
+
             for bc in mesh['edge_bcs'][l]:
 
                 boundary_condition = mesh['boundary_conditions'][bc]
@@ -599,3 +603,57 @@ def edge_power(u:np.ndarray, k:np.ndarray, edge:dict, curvature:int) -> float:
     fluxes = edge_gradient(u, edge)*(k[s:e+1, n+d] if edge['direction'][0] == 0 else k[n+d, s:e+1])
 
     return -d*np.sum(fluxes*areas)
+
+
+
+# def cross_section(regions_x:list[dict], hn:float) -> float:
+#     """Calculates the cross-sectional area of a mesh.
+
+#     This function will be deprecated when lcs are introduced,
+#     and regions generalised to continuous definitions with
+#     lookup by point.
+#     """
+
+#     return hn*sum(r['length'] for row in regions_x for r in row if
+#                   r['type'] == 'internal' or r['direction'] == 1)
+
+
+
+def volume(regions_x:list[dict], x:np.ndarray, dy:float, curvature:int, depth:float=0.0) -> np.ndarray:
+    """Calculates the volume around each mesh node."""
+
+    vol = np.zeros((x.size, len(regions_x)), float)
+    width = {'internal':1.0, 'edge':0.5, 'void':0.0}
+    dx = x[1] - x[0]
+
+    # iterate through all x-slices
+    for j, row in enumerate(regions_x):
+        for n, reg in enumerate(row):
+
+            reg_last = row[n-1]['type'] if n > 0 and row[n-1]['bounds'][1] == reg['bounds'][0] else 'void'
+            reg_next = row[n+1]['type'] if n + 1 < len(row) and row[n+1]['bounds'][0] == reg['bounds'][1] else 'void'
+            n_pts = reg['bounds'][1] - reg['bounds'][0] + 1
+
+            # stations 1 to N
+            dy_l = dy*np.ones(n_pts - 1, float)*width[reg['type']]
+            dy_r = dy*np.r_[np.ones(n_pts - 2, float)*width[reg['type']], width[reg_next]]
+            dx_l = 0.5*dx*np.ones(n_pts - 1, float)
+            dx_r = 0.5*dx*np.r_[np.ones(n_pts - 1), 0. if reg_next == 'void' else 0.5]
+
+            a, b = reg['bounds'][0] + (1 if reg_last != 'void' else 0), reg['bounds'][1]
+
+            if reg_last == 'void':
+                dy_l = np.r_[dy*width[reg['type']], dy_l]
+                dy_r = np.r_[dy*width[reg['type']], dy_r]
+                dx_l = np.r_[0., dx_l]
+
+            # obtain volumes of all stations, add to vol array
+            if curvature == 0:
+                vol[a:b + 1, j] = depth*(dy_l*dx_l + dy_r*dx_r)
+
+            else:
+                vl = dy_l*(x[a:b + 1]**2 - (x[a:b + 1] - dx_l)**2)
+                vr = dy_r*((x[a:b + 1] + dx_r)**2 - x[a:b + 1]**2)
+                vol[a:b + 1, j] = pi*(vl + vr)
+
+    return vol

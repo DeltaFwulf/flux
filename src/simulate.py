@@ -10,6 +10,7 @@ from .mesh import create_mesh, calc_temperature, calc_edge_states, edge_power
 from .util import material_properties
 
 # FIXME: powers updated one timestep off simulation, fix if possible
+# FIXME: add double precision to energy array, getting small error (single precision)
 
 
 
@@ -73,7 +74,6 @@ def run_simulation(config:str):
 
     t = np.zeros(1, float)
     t_now = t[-1]
-    energy_change = 0.0
 
     while t_now < runtime['tf']:
         dt = min(runtime['dt_max'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
@@ -92,8 +92,6 @@ def run_simulation(config:str):
             for l, edge in enumerate(m['edges']):
                 m['edge_powers_latest'][l] = edge_power(m['u_latest'], m['k'], edge, m['curvature'])
 
-            energy_change += dt*sum(m['edge_powers_latest'])
-
             m['u_prev'] = m['u_latest']
             props = material_properties(m['u_prev'], materials[m['material']])
             m.update({'k':props['k'],
@@ -111,10 +109,11 @@ def run_simulation(config:str):
                 m['u'] = np.dstack((m['u'], m['u_latest']))
 
                 for e in range(len(m['edges'])):
-                    # m['edge_fluxes'][e] = np.append(m['edge_fluxes'][e],m['edge_fluxes_latest'][e])
                     m['edge_powers'][e] = np.append(m['edge_powers'][e],m['edge_powers_latest'][e])
 
-                m['net_energy'] = np.append(m['net_energy'], energy_change)
+                # XXX: calculate all enthalpies at the end, calculating cp for each stored u term
+                enthalpy = np.sum(m['mass']*m['cp']*m['u_prev'])
+                m.update({'enthalpy':np.append(m['enthalpy'], enthalpy)})
 
     results = config
     results.update({'t':t})

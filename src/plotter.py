@@ -184,12 +184,11 @@ def plot2d_flat(results:dict, **kwargs) -> None:
 
 def plot_total_powers(results:dict):
     """Temporary plotter for mesh total powers."""
-    
+
     fig, axs = plt.subplots(2, 2)
     ax_pwr = axs[0, 0]
     ax_energy = axs[1, 0]
     ax_mean_temp = axs[0, 1]
-    dt = np.r_[0, results['t'][1:] - results['t'][:-1]]
 
     for mesh in results['meshes'].values():
 
@@ -197,10 +196,20 @@ def plot_total_powers(results:dict):
         for p in mesh['edge_powers']:
             total_power += p
 
-        ax_pwr.plot(results['t'], total_power, '-', label=mesh['label'])
-        ax_energy.plot(results['t'], np.cumsum(dt*total_power), '-', label=mesh['label'] + ' stored')
-        ax_energy.plot(results['t'], mesh['net_energy'], '-', label=mesh['label'] + ' sub-stepped')
-        ax_mean_temp.plot(results['t'], np.mean(mesh['u'], axis=(0, 1), dtype=np.float64), '-', label=mesh['label'])
+        ax_pwr.plot(results['t'],
+                    total_power,
+                    linestyle='solid',
+                    label=mesh['label'])
+
+        ax_energy.plot(results['t'],
+                       mesh['enthalpy'] - mesh['enthalpy'][0],
+                       linestyle='solid',
+                       label=mesh['label'])
+
+        ax_mean_temp.plot(results['t'],
+                          np.sum(mesh['u']*mesh['mass'][:, :, None], axis=(0, 1)) / np.sum(mesh['mass']),
+                          linestyle='solid',
+                          label=mesh['label'])
 
     ax_pwr.set_xlabel("Time, s")
     ax_pwr.set_ylabel("Power, W")
