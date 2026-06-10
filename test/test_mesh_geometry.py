@@ -194,3 +194,18 @@ class MeshVolTests(unittest.TestCase):
         self.assertEqual(vol[1, 1], 0.09817477042468104)
         # total volume
         self.assertEqual(np.sum(vol), 3.141592653589793)
+
+
+    # def test_multi_region(self):
+    #     """If a slice has multiple regions, left side excluded."""
+    #     x = np.array([0.0, 0.25, 0.5, 0.75, 1.0], float)
+    #     dy = 0.25
+
+    #     # put a 1x1 hole in the 5x5 grid
+    #     reg_x = [
+    #         [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
+    #         [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+    #         [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+    #         [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
+    #         [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':-1, 'line':2}],
+    #     ]

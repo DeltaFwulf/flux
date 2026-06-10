@@ -638,7 +638,7 @@ def volume(regions_x:list[dict], x:np.ndarray, dy:float, curvature:int, depth:fl
             dy_l = dy*np.ones(n_pts - 1, float)*width[reg['type']]
             dy_r = dy*np.r_[np.ones(n_pts - 2, float)*width[reg['type']], width[reg_next]]
             dx_l = 0.5*dx*np.ones(n_pts - 1, float)
-            dx_r = 0.5*dx*np.r_[np.ones(n_pts - 1), 0. if reg_next == 'void' else 0.5]
+            dx_r = 0.5*dx*np.r_[np.ones(n_pts - 2), 0. if reg_next == 'void' else 0.5]
 
             a, b = reg['bounds'][0] + (1 if reg_last != 'void' else 0), reg['bounds'][1]
 
@@ -646,6 +646,7 @@ def volume(regions_x:list[dict], x:np.ndarray, dy:float, curvature:int, depth:fl
                 dy_l = np.r_[dy*width[reg['type']], dy_l]
                 dy_r = np.r_[dy*width[reg['type']], dy_r]
                 dx_l = np.r_[0., dx_l]
+                dx_r = np.r_[0.5*dx, dx_r]
 
             # obtain volumes of all stations, add to vol array
             if curvature == 0:

@@ -1,7 +1,7 @@
 # Simulation file for OctoForge Chamber
 
-tf: 8000.0
-dt_storage: 40.0  # dt at which to store results to array
+tf: 16000.0
+dt_storage: 160.0  # dt at which to store results to array
 dt_max: 5.0      # maximum dt in simulation
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5

@@ -303,6 +303,7 @@ def save_figure(ani) -> bool:
     filename = input("Please give filename (without extension): ")
     path = join(save_dir, filename + '.gif')
 
+    # FIXME: allow the user to input a different filename
     if exists(path) and input("A file already exists with this name, overwrite? (y/n): ").casefold() == 'n':
         print("save cancelled")
         return False
