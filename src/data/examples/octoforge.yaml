@@ -1,6 +1,6 @@
 # Simulation file for OctoForge Chamber
 
-tf: 16000.0
+tf: 8000.0
 dt_storage: 160.0  # dt at which to store results to array
 dt_max: 5.0      # maximum dt in simulation
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
@@ -13,7 +13,7 @@ meshes:
     label: 'firebrick'
     colour: 'brown'
     dx: 0.01
-    dy: 0.01
+    dy: 0.005
     u0: 288.0
     material: 'IN_26_firebrick'
     curvature: 1
