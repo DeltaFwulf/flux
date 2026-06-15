@@ -173,7 +173,7 @@ class MeshVolTests(unittest.TestCase):
         """check cylindrical mesh elemental volumes."""
 
         x = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
-        dy = 0.25
+        dy = 0.5
 
         reg_x = [
             [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
@@ -186,26 +186,26 @@ class MeshVolTests(unittest.TestCase):
         vol = volume(reg_x, x, dy, curvature=1)
 
         # corner
-        self.assertEqual(vol[0, 0], 0.006135923151542565)
+        self.assertEqual(vol[0, 0], 0.01227184630308513)
         # edges
-        self.assertEqual(vol[0, 1], 0.01227184630308513)
-        self.assertEqual(vol[1, 0], 0.04908738521234052)
+        self.assertEqual(vol[0, 1], 0.02454369260617026)
+        self.assertEqual(vol[1, 0], 0.09817477042468104)
         # internal
-        self.assertEqual(vol[1, 1], 0.09817477042468104)
+        self.assertEqual(vol[1, 1], 0.19634954084936207)
         # total volume
-        self.assertEqual(np.sum(vol), 3.141592653589793)
+        self.assertEqual(np.sum(vol), 6.283185307179586)
 
 
-    # def test_multi_region(self):
-    #     """If a slice has multiple regions, left side excluded."""
-    #     x = np.array([0.0, 0.25, 0.5, 0.75, 1.0], float)
-    #     dy = 0.25
+    def test_multi_region(self):
+        """If a slice has multiple regions, left side excluded."""
+        x = np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], float)
+        dy = 1.0
 
-    #     # put a 1x1 hole in the 5x5 grid
-    #     reg_x = [
-    #         [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
-    #         [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
-    #         [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
-    #         [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
-    #         [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':-1, 'line':2}],
-    #     ]
+        # internal region follows an edge region
+        reg_x = [
+            [{'bounds':(0, 3), 'length':0.6, 'type':'edge', 'direction':1, 'line':0},
+             {'bounds':(3, 5), 'length':0.4, 'type':'internal', 'line_s':3, 'line_e':1}
+            ]]
+
+        vol = volume(reg_x, x, dy, curvature=0, depth=3.0)
+        assert_allclose(vol, np.array([[0.15, 0.3, 0.3, 0.45, 0.6, 0.3]]).transpose(), atol=1e-6)

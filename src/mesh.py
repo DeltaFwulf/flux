@@ -401,7 +401,7 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
         mesh = cfg['meshes'][split_link[1]]
         link_obj = deepcopy(mesh['edges'][int(split_link[2])]) | {'type':'mesh_edge'}
 
-        link_obj.update({'hn':mesh['dx'] if link_obj['direction'][0] == 0 else mesh['dy']})
+        link_obj.update({'hn':mesh['dy'] if link_obj['direction'][0] == 0 else mesh['dx']})
         s, e, n = link_obj['indices']
         u = mesh['u_prev'][s:e+1, n] if link_obj['direction'][0] == 0 else\
             mesh['u_prev'][n, s:e+1].ravel()
@@ -606,19 +606,6 @@ def edge_power(u:np.ndarray, k:np.ndarray, edge:dict, curvature:int) -> float:
 
 
 
-# def cross_section(regions_x:list[dict], hn:float) -> float:
-#     """Calculates the cross-sectional area of a mesh.
-
-#     This function will be deprecated when lcs are introduced,
-#     and regions generalised to continuous definitions with
-#     lookup by point.
-#     """
-
-#     return hn*sum(r['length'] for row in regions_x for r in row if
-#                   r['type'] == 'internal' or r['direction'] == 1)
-
-
-
 def volume(regions_x:list[dict], x:np.ndarray, dy:float, curvature:int, depth:float=0.0) -> np.ndarray:
     """Calculates the volume around each mesh node."""
 
@@ -638,7 +625,7 @@ def volume(regions_x:list[dict], x:np.ndarray, dy:float, curvature:int, depth:fl
             dy_l = dy*np.ones(n_pts - 1, float)*width[reg['type']]
             dy_r = dy*np.r_[np.ones(n_pts - 2, float)*width[reg['type']], width[reg_next]]
             dx_l = 0.5*dx*np.ones(n_pts - 1, float)
-            dx_r = 0.5*dx*np.r_[np.ones(n_pts - 2), 0. if reg_next == 'void' else 0.5]
+            dx_r = 0.5*dx*np.r_[np.ones(n_pts - 2), 0. if reg_next == 'void' else 1.0]
 
             a, b = reg['bounds'][0] + (1 if reg_last != 'void' else 0), reg['bounds'][1]
 
