@@ -6,7 +6,7 @@ from math import pi
 import numpy as np
 from numpy.testing import assert_allclose
 
-from src.mesh import edge_area, volume
+from src.mesh import edge_area, volume, grid_resolution
 
 
 
@@ -209,3 +209,49 @@ class MeshVolTests(unittest.TestCase):
 
         vol = volume(reg_x, x, dy, curvature=0, depth=3.0)
         assert_allclose(vol, np.array([[0.15, 0.3, 0.3, 0.45, 0.6, 0.3]]).transpose(), atol=1e-6)
+
+
+
+class MeshResolutionTests(unittest.TestCase):
+    """Tests for mesh resolution calculations."""
+
+    def test_res_forcefiner(self):
+        """Grid tiles mesh and is at least as fine as input resolution."""
+
+        lines = [[[0.0, 0.0], [1.5, 0.0]],
+                 [[1.5, 0.0], [1.5, 1.5]],
+                 [[1.5, 1.5], [0.0, 1.5]],
+                 [[0.0, 1.5], [0.0, 0.0]]]
+
+        res = grid_resolution(lines, 0.2, 0.2, force_finer=True)
+
+        self.assertEqual(res['dx'], 0.1875)
+        self.assertEqual(res['dy'], 0.1875)
+
+
+    def test_res_already_fits(self):
+        """If the input resolution fits, don't alter it."""
+
+        lines = [[[0.0, 0.0], [1.5, 0.0]],
+                 [[1.5, 0.0], [1.5, 1.5]],
+                 [[1.5, 1.5], [0.0, 1.5]],
+                 [[0.0, 1.5], [0.0, 0.0]]]
+
+        res = grid_resolution(lines, 0.3, 0.3, force_finer=True)
+
+        self.assertEqual(res['dx'], 0.3)
+        self.assertEqual(res['dy'], 0.3)
+
+
+    def test_min_elements(self):
+        """At least (min_elements + 1) points should be present at narrowest width."""
+
+        lines = [[[0.0, 0.0], [1.5, 0.0]],
+                 [[1.5, 0.0], [1.5, 1.5]],
+                 [[1.5, 1.5], [0.0, 1.5]],
+                 [[0.0, 1.5], [0.0, 0.0]]]
+
+        res = grid_resolution(lines, 0.3, 0.3, force_finer=True, min_elements=10)
+
+        self.assertEqual(res['dx'], 0.15)
+        self.assertEqual(res['dy'], 0.15)

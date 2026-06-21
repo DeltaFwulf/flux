@@ -215,7 +215,7 @@ def find_edges(mesh:dict) -> list:
 
 
 
-def calc_new_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True) -> dict:
+def grid_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True, min_elements:int=1) -> dict:
     """Calculates a mesh resolution that tiles the boundary in both dimensions.
     
     If the calculated resolution is coarser than the original resolution and
@@ -229,20 +229,27 @@ def calc_new_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True)
     x = np.unique(np.array([p[0] for l in lines for p in l]))
     y = np.unique(np.array([p[1] for l in lines for p in l]))
 
-    if x.size == 2:
+    min_width_x = np.min(np.abs(np.diff(x)))
+    min_width_y = np.min(np.abs(np.diff(y)))
+
+    if abs(x[-1] - x[0]) / dx0 == round(abs(x[-1] - x[0]) / dx0):
+        dx = dx0
+    elif x.size == 2:
         dx = x[1] - x[0]
     else:
         dx = float(np.gcd.reduce(((x[1:] - x[0])*10**pow_x).astype(int))) / 10**pow_x
 
-    while dx > dx0 and force_finer:
+    while dx > dx0 and force_finer or min_width_x / dx < min_elements:
         dx /= 2
 
-    if y.size == 2:
+    if abs(y[-1] - y[0]) / dy0 == round(abs(y[-1] - y[0]) / dy0):
+        dy = dy0
+    elif y.size == 2:
         dy = y[1] - y[0]
     else:
         dy = float(np.gcd.reduce(((y[1:] - y[0])*10**pow_y).astype(int))) / 10**pow_y
 
-    while dy > dy0 and force_finer:
+    while dy > dy0 and force_finer or min_width_y / dy < min_elements:
         dy /= 2
 
     return {'dx':dx, 'dy':dy}
