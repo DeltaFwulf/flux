@@ -20,8 +20,7 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
 
-    # set (dx, dy) so all lines lie on the grid
-    m = m | calc_new_resolution(m['lines'], m['dx'], m['dy'], force_finer)
+    m = m | grid_resolution(m['lines'], m['dx'], m['dy'], force_finer, min_elements=5)
 
     m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
     m.update({'j':np.arange(0, max((p[1] - y_min) / m['dy'] for l in m['lines'] for p in l) + 1, dtype=int)})
@@ -32,9 +31,8 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     m.update({'y':np.round(y_min + m['dy']*m['j'], y_res)})
     m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
     m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
-
     find_edges(m)
-    calc_bc_relations(m)
+    m.update({'edge_bcs':calc_bc_relations(m['edges'], m['boundary_conditions'])})
 
     m.update({'u':np.zeros((m['i'].size, m['j'].size, 1), float) + mesh_def['u0']})
     m.update({'u_latest':m['u'][:, :, -1]})
@@ -48,7 +46,6 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
               'rho':props['rho'],
               'emissivity':props['emissivity']})
 
-    # vol = (m['depth'] if m['curvature'] == 0 else 2*pi)*cross_section(m['regions_x'], m['dy'])
     vol = volume(m['regions_x'], m['x'], m['dy'], m['curvature'], m.get('depth'))
     m.update({'mass':m['rho']*vol})
     m.update({'enthalpy':np.sum(m['mass']*m['cp']*m['u_prev'])})

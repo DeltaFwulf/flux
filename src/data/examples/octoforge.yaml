@@ -1,11 +1,11 @@
 # Simulation file for OctoForge Chamber
 
-tf: 8000.0
-dt_storage: 160.0  # dt at which to store results to array
+tf: 800.0
+dt_storage: 16.0  # dt at which to store results to array
 dt_max: 5.0      # maximum dt in simulation
 theta: 0.5      # explicit - implicit factor (0 = exp, 1 = imp)
 max_courant: 0.5
-force_finer: True
+force_finer: False
 
 meshes:
 
@@ -13,7 +13,7 @@ meshes:
     label: 'firebrick'
     colour: 'brown'
     dx: 0.01
-    dy: 0.005
+    dy: 0.01
     u0: 288.0
     material: 'IN_26_firebrick'
     curvature: 1
@@ -90,8 +90,8 @@ meshes:
   rockwool_blanket:
     label: 'rockwool blanket'
     colour: 'white'
-    dx: 0.01
-    dy: 0.01
+    dx: 0.05
+    dy: 0.05
     u0: 288.0
     material: 'IN_26_firebrick'
     curvature: 1
