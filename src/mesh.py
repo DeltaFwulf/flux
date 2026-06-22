@@ -20,7 +20,7 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
 
-    m = m | grid_resolution(m['lines'], m['dx'], m['dy'], force_finer, min_elements=5)
+    m = m | grid_resolution(m['lines'], m['dx'], m['dy'], force_finer, min_elements=4)
 
     m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
     m.update({'j':np.arange(0, max((p[1] - y_min) / m['dy'] for l in m['lines'] for p in l) + 1, dtype=int)})
@@ -133,7 +133,7 @@ def slice_regions(direction:str, xp:np.ndarray, xn:float, lines:list) -> list[di
 
         if is_edge:
             reg.update({'type':'edge', 'line':l})
-            reg.update({'direction':-trans['sign_n']*trans['sign_p']})
+            reg.update({'normal':-trans['sign_n']*trans['sign_p']})
 
         else:
             reg.update({'type':'internal'})
@@ -161,18 +161,18 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'indices':(s, e, k)})  # start, end, normal
                 edge.update({'bounds':(mesh['x'][s], mesh['x'][e], mesh['y'][k])})
                 edge.update({'line_index': reg['line']})
-                edge.update({'direction':(0, reg['direction'])})
+                edge.update({'normal':(0, reg['normal'])})
                 edge.update({'hp':mesh['dx']})
                 edge.update({'hn':mesh['dy']})
 
                 edge.update({'areas':edge_area(edge['bounds'],
                                                 edge['hp'],
-                                                edge['direction'],
+                                                edge['normal'],
                                                 mesh['curvature'],
                                                 mesh.get('depth'))})
 
                 edge.update({'perimeter':calc_face_perimeter(edge['bounds'],
-                                           edge['direction'],
+                                           edge['normal'],
                                            mesh['curvature'],
                                            mesh.get('depth'))})
 
@@ -189,18 +189,18 @@ def find_edges(mesh:dict) -> list:
                 edge.update({'indices':(s, e, k)})
                 edge.update({'bounds':(mesh['y'][s], mesh['y'][e], mesh['x'][k])})
                 edge.update({'line_index':reg['line']})
-                edge.update({'direction':(reg['direction'], 0)})
+                edge.update({'normal':(reg['normal'], 0)})
                 edge.update({'hp':mesh['dy']})
                 edge.update({'hn':mesh['dx']})
 
                 edge.update({'areas':edge_area(edge['bounds'],
                                                 edge['hp'],
-                                                edge['direction'],
+                                                edge['normal'],
                                                 mesh['curvature'],
                                                 mesh.get('depth'))})
 
                 edge.update({'perimeter':calc_face_perimeter(edge['bounds'],
-                                           edge['direction'],
+                                           edge['normal'],
                                            mesh['curvature'],
                                            mesh.get('depth'))})
 
@@ -285,7 +285,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
                 if es['type'] == 'direct':
                     u_mid[s:e+1, j] = es['values']
                 else:
-                    d_edge = sum(m['edges'][reg['line']]['direction'])
+                    d_edge = sum(m['edges'][reg['line']]['normal'])
                     u_mid[s:e+1, j] = u0[s:e+1, j+d_edge] - m['dy']*es['values']*d_edge
 
                 continue
@@ -327,7 +327,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
                 if es['type'] == 'direct':
                     u_out[i, s:e+1] = es['values']
                 else:
-                    d_edge = sum(m['edges'][reg['line']]['direction'])
+                    d_edge = sum(m['edges'][reg['line']]['normal'])
                     u_out[i, s:e+1] = u_mid[i+d_edge, s:e+1] - m['dx']*es['values']*d_edge
 
                 continue
@@ -405,9 +405,9 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
         mesh = cfg['meshes'][split_link[1]]
         link_obj = deepcopy(mesh['edges'][int(split_link[2])]) | {'type':'mesh_edge'}
 
-        link_obj.update({'hn':mesh['dy'] if link_obj['direction'][0] == 0 else mesh['dx']})
+        link_obj.update({'hn':mesh['dy'] if link_obj['normal'][0] == 0 else mesh['dx']})
         s, e, n = link_obj['indices']
-        u = mesh['u_prev'][s:e+1, n] if link_obj['direction'][0] == 0 else\
+        u = mesh['u_prev'][s:e+1, n] if link_obj['normal'][0] == 0 else\
             mesh['u_prev'][n, s:e+1].ravel()
 
         link_obj.update({'u':u})
@@ -419,15 +419,15 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
 
         elif mode == 'conduction':
 
-            u_in = (mesh['u_prev'][s:e+1, n+sum(link_obj['direction'])] if\
-                    link_obj['direction'][0] == 0 else\
-                    mesh['u_prev'][n+sum(link_obj['direction']), s:e+1]).ravel()
+            u_in = (mesh['u_prev'][s:e+1, n+sum(link_obj['normal'])] if\
+                    link_obj['normal'][0] == 0 else\
+                    mesh['u_prev'][n+sum(link_obj['normal']), s:e+1]).ravel()
 
-            k = (mesh['k'][s:e+1, n] if link_obj['direction'][0] == 0 else\
+            k = (mesh['k'][s:e+1, n] if link_obj['normal'][0] == 0 else\
                 mesh['k'][n, s:e+1]).ravel()
 
-            k_in = (mesh['k'][s:e+1, n+sum(link_obj['direction'])] if link_obj['direction'][0]\
-                == 0 else mesh['k'][n+sum(link_obj['direction']), s:e+1]).ravel()
+            k_in = (mesh['k'][s:e+1, n+sum(link_obj['normal'])] if link_obj['normal'][0]\
+                == 0 else mesh['k'][n+sum(link_obj['normal']), s:e+1]).ravel()
 
             k_bar = 0.5*(k + k_in)
 
@@ -482,12 +482,12 @@ def calc_edge_states(cfg:dict) -> None:
         for l, edge in enumerate(mesh['edges']):
 
             s, e, n = edge['indices']
-            d = sum(edge['direction'])
+            d = sum(edge['normal'])
 
             edge_link = edge | {'emissivity':mesh['emissivity']}
 
             # get appropriate slice of temperature, conductivity, etc.
-            if edge['direction'][0] == 0: # slice along x axis
+            if edge['normal'][0] == 0: # slice along x axis
                 edge_link.update({'u':mesh['u_prev'][s:e+1, n]})
                 edge_link.update({'u_in':mesh['u_prev'][s:e+1, n+d]})
                 edge_link.update({'k_bar':0.5*(mesh['k'][s:e+1, n] + mesh['k'][s:e+1, n+d])})
@@ -525,13 +525,13 @@ def calc_edge_states(cfg:dict) -> None:
                         state_type = 'gradient'
                         pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         q = convection(edge_link, pair_link)
-                        state_val -= sum(edge['direction'])*q / edge_link['k_bar']
+                        state_val -= sum(edge['normal'])*q / edge_link['k_bar']
 
                     case 'radiation':
                         state_type = 'gradient'
                         pair_link = link_to_mesh(cfg, edge, boundary_condition)
                         q = radiation(edge_link, pair_link)
-                        state_val -= sum(edge['direction'])*q / edge_link['k_bar']
+                        state_val -= sum(edge['normal'])*q / edge_link['k_bar']
 
             edge_states.append({'type':state_type, 'values':state_val})
 
@@ -583,12 +583,12 @@ def edge_gradient(u:np.ndarray, edge:dict) -> np.ndarray:
     """
 
     s, e, n = edge['indices']
-    n_in = n + 2*sum(edge['direction'])
+    n_in = n + 2*sum(edge['normal'])
 
-    u_edge = u[s:e+1, n] if edge['direction'][0] == 0 else u[n, s:e+1]
-    u_in = u[s:e+1, n_in] if edge['direction'][0] == 0 else u[n_in, s:e+1]
+    u_edge = u[s:e+1, n] if edge['normal'][0] == 0 else u[n, s:e+1]
+    u_in = u[s:e+1, n_in] if edge['normal'][0] == 0 else u[n_in, s:e+1]
 
-    return sum(edge['direction'])*(u_in - u_edge) / (2*edge['hn'])
+    return sum(edge['normal'])*(u_in - u_edge) / (2*edge['hn'])
 
 
 
@@ -599,12 +599,12 @@ def edge_power(u:np.ndarray, k:np.ndarray, edge:dict, curvature:int) -> float:
     flows out, regardless of edge direction."""
 
     s, e, n = edge['indices']
-    d = sum(edge['direction'])
+    d = sum(edge['normal'])
 
     bn = edge['bounds'][2] + d*edge['hn']
-    sf = (bn / edge['bounds'][2]) if (edge['direction'][1] == 0 and curvature == 1) else 1
+    sf = (bn / edge['bounds'][2]) if (edge['normal'][1] == 0 and curvature == 1) else 1
     areas = sf*edge['areas']
-    fluxes = edge_gradient(u, edge)*(k[s:e+1, n+d] if edge['direction'][0] == 0 else k[n+d, s:e+1])
+    fluxes = edge_gradient(u, edge)*(k[s:e+1, n+d] if edge['normal'][0] == 0 else k[n+d, s:e+1])
 
     return -d*np.sum(fluxes*areas)
 

@@ -56,13 +56,13 @@ def convection(edge:dict, link:dict) -> np.ndarray:
     if reynolds > 100: # Forced convection, orientation invariant
         q = np.zeros_like(l, float)
 
-    elif edge['direction'][1] == 0: # Natural convection, vertical
+    elif edge['normal'][1] == 0: # Natural convection, vertical
         l[0] = edge['hp']  # prevent undefined flux at l == 0
         rayleigh = 9.81*beta*np.abs(du)*l**3 / (fluid['kinematic_viscosity']*alpha)
         nusselt = 0.508*rayleigh**0.25 *(prandtl / (0.952 + prandtl))**0.25
         q = nusselt*du*fluid['conductivity'] / l
 
-    elif sum(edge['direction']) < 0 == np.mean(du) < link['temperature']: # Horizontal, stable
+    elif sum(edge['normal']) < 0 == np.mean(du) < link['temperature']: # Horizontal, stable
         diameter = 2*l[-1]
         rayleigh = 9.81*beta*np.abs(du)*diameter**3 / (fluid['kinematic_viscosity']*alpha)
         nusselt = 0.82*rayleigh**0.2 *prandtl**(0.034)

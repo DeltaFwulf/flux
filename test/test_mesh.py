@@ -93,7 +93,7 @@ class MeshStructureTests(unittest.TestCase):
                 [[1.0, 1.0], [0.0, 1.0]],
                 [[0.0, 1.0], [0.0, 0.0]]]
 
-        expected = [{'bounds':(0, 10), 'length':1.0, 'type':'edge', 'line':0, 'direction':1}]
+        expected = [{'bounds':(0, 10), 'length':1.0, 'type':'edge', 'line':0, 'normal':1}]
 
         self.assertSequenceEqual(slice_regions(direction, xp, xn, lines), expected)
 
@@ -109,7 +109,7 @@ class MeshStructureTests(unittest.TestCase):
                 [[1.0, 1.3], [0.0, 1.3]],
                 [[0.0, 1.3], [0.0, 0.0]]]
 
-        expected = [{'bounds':(0, 13), 'length':1.3, 'type':'edge', 'line':1, 'direction':-1}]
+        expected = [{'bounds':(0, 13), 'length':1.3, 'type':'edge', 'line':1, 'normal':-1}]
 
         self.assertSequenceEqual(slice_regions(direction, xp, xn, lines), expected)
 
@@ -297,11 +297,11 @@ class MeshVolTests(unittest.TestCase):
         dy = 0.25
 
         reg_x = [
-            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'normal':1, 'line':0}],
             [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
             [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
             [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
-            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':-1, 'line':2}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'normal':-1, 'line':2}],
         ]
 
         vol = volume(reg_x, x, dy, curvature=0, depth=3.0)
@@ -323,11 +323,11 @@ class MeshVolTests(unittest.TestCase):
         dy = 0.5
 
         reg_x = [
-            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':1, 'line':0}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'normal':1, 'line':0}],
             [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
             [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
             [{'bounds':(0, 4), 'length':1.0, 'type':'internal', 'line_s':3, 'line_e':1}],
-            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'direction':-1, 'line':2}],
+            [{'bounds':(0, 4), 'length':1.0, 'type':'edge', 'normal':-1, 'line':2}],
         ]
 
         vol = volume(reg_x, x, dy, curvature=1)
@@ -350,7 +350,7 @@ class MeshVolTests(unittest.TestCase):
 
         # internal region follows an edge region
         reg_x = [
-            [{'bounds':(0, 3), 'length':0.6, 'type':'edge', 'direction':1, 'line':0},
+            [{'bounds':(0, 3), 'length':0.6, 'type':'edge', 'normal':1, 'line':0},
              {'bounds':(3, 5), 'length':0.4, 'type':'internal', 'line_s':3, 'line_e':1}
             ]]
 

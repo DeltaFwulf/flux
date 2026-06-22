@@ -230,6 +230,7 @@ def plot_total_powers(results:dict):
     plt.show()
 
 
+
 def plot_steady_slice(results:dict) -> None:
     """Plots the pipe's final temperature distribution.
 
