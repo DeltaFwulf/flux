@@ -1,6 +1,6 @@
 """Contains functions used to manipulate meshes."""
 
-from copy import deepcopy
+from copy import copy
 from math import copysign, pi
 import numpy as np
 
@@ -15,7 +15,7 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     an explanation of meshes can be found here: 
     https://github.com/DeltaFwulf/flux/wiki/Meshes"""
 
-    m = deepcopy(mesh_def)
+    m = copy(mesh_def)
 
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
@@ -253,20 +253,19 @@ def grid_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True, min
 
 
 
-def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
+def update_temp(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     """Updates the state of a single mesh over a single timestep via the ADI method."""
 
     m = mesh
     alpha = m['k'] / (m['rho']*m['cp'])
 
-    # TODO: separate beta from alpha coefficients, making betas floats
-    bx_c = curv*alpha*(1 - theta)*dt / (2*m['dx'])
-    bx_n = curv*alpha*theta*dt / (2*m['dx'])
-    bxx_c = alpha*dt*(1 - theta) / m['dx']**2
-    bxx_n = alpha*dt*theta / m['dx']**2
-    # TODO: by restricting curv <= 1, this is not necessary
-    byy_c = 0 if curv > 1 else (alpha*(1 - theta)*dt / m['dy']**2)
-    byy_n = 0 if curv > 1 else (alpha*theta*dt / m['dy']**2)
+    bx_c = curv*(1 - theta)*dt / (2*m['dx'])
+    bx_n = curv*theta*dt / (2*m['dx'])
+    bxx_c = dt*(1 - theta) / m['dx']**2
+    bxx_n = dt*theta / m['dx']**2
+
+    byy_c = dt*(1 - theta) / m['dy']**2
+    byy_n = dt*theta / m['dy']**2
 
     u0 = mesh['u_prev']
     u_mid = np.zeros_like(u0, float)
@@ -275,8 +274,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
     for j in m['j']:
         for reg in mesh['regions_x'][j]:
 
-            s = reg['bounds'][0]
-            e = reg['bounds'][1]
+            s, e = reg['bounds']
 
             if reg['type'] == 'edge':
 
@@ -285,8 +283,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
                 if es['type'] == 'direct':
                     u_mid[s:e+1, j] = es['values']
                 else:
-                    d_edge = sum(m['edges'][reg['line']]['normal'])
-                    u_mid[s:e+1, j] = u0[s:e+1, j+d_edge] - m['dy']*es['values']*d_edge
+                    u_mid[s:e+1, j] = u0[s:e+1, j+reg['normal']] - m['dy']*es['values']*reg['normal']
 
                 continue
 
@@ -295,19 +292,19 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
             vs = m['edge_states'][reg['line_s']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
             ve = m['edge_states'][reg['line_e']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
 
-            a = np.r_[0.0, -bxx_n[s:e-1, j] + bx_n[s:e-1, j] / m['x'][s+1:e], 0.0 if\
+            a = np.r_[0.0, (-bxx_n + bx_n / m['x'][s+1:e])*alpha[s:e-1, j], 0.0 if\
                         te== 'direct' else -1.0]
 
-            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*bxx_n[s+1:e,j], 1.0]
+            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*bxx_n*alpha[s+1:e,j], 1.0]
 
-            c = np.r_[0.0 if ts == 'direct' else 1.0, -bxx_n[s+2:e+1,j] -\
-                        bx_n[s+2:e+1,j] / m['x'][s+1:e], 0.0]
+            c = np.r_[0.0 if ts == 'direct' else 1.0, -(bxx_n +\
+                        bx_n / m['x'][s+1:e])*alpha[s+2:e+1,j], 0.0]
 
             d = np.r_[vs*(1 if ts == 'direct' else m['dx']),\
 
-                        byy_c[s+1:e,j-1]*u0[s+1:e,j-1] +\
-                        (1 - 2*byy_c[s+1:e,j])*u0[s+1:e,j] +\
-                        byy_c[s+1:e,j+1]*u0[s+1:e,j+1],\
+                        byy_c*alpha[s+1:e,j-1]*u0[s+1:e,j-1] +\
+                        (1 - 2*byy_c*alpha[s+1:e,j])*u0[s+1:e,j] +\
+                        byy_c*alpha[s+1:e,j+1]*u0[s+1:e,j+1],\
 
                         ve*(1 if te == 'direct' else m['dx'])]
 
@@ -318,8 +315,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
     for i in m['i']:
         for reg in m['regions_y'][i]:
 
-            s = reg['bounds'][0]
-            e = reg['bounds'][1]
+            s, e = reg['bounds']
 
             if reg['type'] == 'edge':
                 es = m['edge_states'][reg['line']]
@@ -327,8 +323,7 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
                 if es['type'] == 'direct':
                     u_out[i, s:e+1] = es['values']
                 else:
-                    d_edge = sum(m['edges'][reg['line']]['normal'])
-                    u_out[i, s:e+1] = u_mid[i+d_edge, s:e+1] - m['dx']*es['values']*d_edge
+                    u_out[i, s:e+1] = u_mid[i+reg['normal'], s:e+1] - m['dx']*es['values']*reg['normal']
 
                 continue
 
@@ -337,17 +332,17 @@ def calc_temperature(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarra
             vs = m['edge_states'][reg['line_s']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
             ve = m['edge_states'][reg['line_e']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
 
-            a = np.r_[0.0, -byy_n[i, s:e-1], 0.0 if te == 'direct' else -1.0]
+            a = np.r_[0.0, -byy_n*alpha[i, s:e-1], 0.0 if te == 'direct' else -1.0]
 
-            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*byy_n[i, s+1:e], 1.0]
+            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*byy_n*alpha[i,s+1:e], 1.0]
 
-            c = np.r_[0.0 if ts == 'direct' else 1.0, -byy_n[i,s+2:e+1], 0.0]
+            c = np.r_[0.0 if ts == 'direct' else 1.0, -byy_n*alpha[i,s+2:e+1], 0.0]
 
             d = np.r_[vs*(1 if ts == 'direct' else m['dy']),\
 
-                (bxx_c[i+1,s+1:e] + bx_c[i+1,s+1:e] / m['x'][i])*u_mid[i+1,s+1:e] +\
-                (1 - 2*bxx_c[i,s+1:e])*u_mid[i,s+1:e] +\
-                (bxx_c[i-1,s+1:e] - bx_c[i-1,s+1:e] / m['x'][i])*u_mid[i-1,s+1:e],
+                (bxx_c + bx_c / m['x'][i])*alpha[i+1,s+1:e]*u_mid[i+1,s+1:e] +\
+                (1 - 2*bxx_c*alpha[i,s+1:e])*u_mid[i,s+1:e] +\
+                (bxx_c - bx_c / m['x'][i])*alpha[i-1,s+1:e]*u_mid[i-1,s+1:e],
 
                 ve*(1 if te == 'direct' else m['dy'])]
 
@@ -363,21 +358,22 @@ def tdma(a, b, c, d) -> np.ndarray:
     # NOTE: yes, I am aware of scipy.sparse.linalg.spsolve; it was slower for this
     #       implementation :)
 
-    # forward substitution
-    p = np.r_[-c[0] / b[0], np.zeros((d.size - 1), float)]
-    q = np.r_[d[0] / b[0], np.zeros((d.size - 1), float)]
+    p = copy(d)
+    q = copy(d)
+
+    p[0] = -c[0] / b[0]
+    q[0] = d[0] / b[0]
 
     for i in range(1, d.size):
         dn = b[i] + a[i]*p[i - 1]
         p[i] = - c[i] / dn
         q[i] = (d[i] - a[i]*q[i - 1]) / dn
 
-    # back substitution for x
-    x = np.r_[np.zeros((d.size - 1), float), q[-1]]
-    for i in range(x.size - 2, -1, -1):
-        x[i] = p[i]*x[i + 1] + q[i]
+    d[-1] = q[-1]
+    for i in range(d.size - 2, -1, -1):
+        d[i] = p[i]*d[i + 1] + q[i]
 
-    return x
+    return d
 
 
 
@@ -397,13 +393,13 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
     split_link = bc['link'].split('/')
 
     if len(split_link) == 1:
-        link_obj = deepcopy(cfg['environment'][split_link[0]]) | {'type':'environment'}
+        link_obj = copy(cfg['environment'][split_link[0]]) | {'type':'environment'}
         if mode == 'radiation':
             link_obj.update({'u4_mean':link_obj['temperature']**4})
 
     elif split_link[0] == 'meshes':
         mesh = cfg['meshes'][split_link[1]]
-        link_obj = deepcopy(mesh['edges'][int(split_link[2])]) | {'type':'mesh_edge'}
+        link_obj = copy(mesh['edges'][int(split_link[2])]) | {'type':'mesh_edge'}
 
         link_obj.update({'hn':mesh['dy'] if link_obj['normal'][0] == 0 else mesh['dx']})
         s, e, n = link_obj['indices']

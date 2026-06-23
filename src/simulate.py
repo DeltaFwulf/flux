@@ -6,7 +6,7 @@ import yaml
 import numpy as np
 
 from .lumped_capacitor import init_lc
-from .mesh import create_mesh, calc_temperature, calc_edge_states, edge_power
+from .mesh import create_mesh, calc_edge_states, edge_power, update_temp
 from .util import material_properties
 
 # FIXME: powers updated one timestep off simulation, fix if possible
@@ -100,7 +100,8 @@ def run_simulation(config:str):
                       'emissivity':props['emissivity']})
 
             calc_edge_states(cfg=config)
-            m['u_latest'] = calc_temperature(mesh=m,
+            
+            m['u_latest'] = update_temp(mesh=m,
                                         dt=dt,
                                         curv=m['curvature'],
                                         theta=runtime['theta'])
