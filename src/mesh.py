@@ -15,7 +15,7 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     an explanation of meshes can be found here: 
     https://github.com/DeltaFwulf/flux/wiki/Meshes"""
 
-    m = copy(mesh_def)
+    m = mesh_def
 
     x_min = min(pt[0] for line in m['lines'] for pt in line)
     y_min = min(pt[1] for line in m['lines'] for pt in line)
@@ -399,13 +399,13 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
     split_link = bc['link'].split('/')
 
     if len(split_link) == 1:
-        link_obj = copy(cfg['environment'][split_link[0]]) | {'type':'environment'}
+        link_obj = cfg['environment'][split_link[0]] | {'type':'environment'}
         if mode == 'radiation':
             link_obj.update({'u4_mean':link_obj['temperature']**4})
 
     elif split_link[0] == 'meshes':
         mesh = cfg['meshes'][split_link[1]]
-        link_obj = copy(mesh['edges'][int(split_link[2])]) | {'type':'mesh_edge'}
+        link_obj = mesh['edges'][int(split_link[2])] | {'type':'mesh_edge'}
 
         link_obj.update({'hn':mesh['dy'] if link_obj['normal'][0] == 0 else mesh['dx']})
         s, e, n = link_obj['indices']
@@ -448,7 +448,7 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
 
         s_edge, e_edge = edge['indices'][:2]
         lc = cfg['lumped_capacitors'][split_link[1]]
-        link_obj = copy(lc['edges'][int(split_link[2])]) | {'type':'lc_edge'}
+        link_obj = lc['edges'][int(split_link[2])] | {'type':'lc_edge'}
         link_obj.update({'u':lc['u_prev'] + np.zeros((e_edge - s_edge + 1), float)})
 
         if mode == 'radiation':
