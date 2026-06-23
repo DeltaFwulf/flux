@@ -31,6 +31,7 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     m.update({'y':np.round(y_min + m['dy']*m['j'], y_res)})
     m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
     m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
+
     find_edges(m)
     m.update({'edge_bcs':calc_bc_relations(m['edges'], m['boundary_conditions'])})
 
@@ -253,22 +254,22 @@ def grid_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True, min
 
 
 
-def update_temp(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
+def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     """Updates the state of a single mesh over a single timestep via the ADI method."""
 
     m = mesh
     alpha = m['k'] / (m['rho']*m['cp'])
 
-    bx_c = curv*(1 - theta)*dt / (2*m['dx'])
-    bx_n = curv*theta*dt / (2*m['dx'])
-    bxx_c = dt*(1 - theta) / m['dx']**2
-    bxx_n = dt*theta / m['dx']**2
-
-    byy_c = dt*(1 - theta) / m['dy']**2
-    byy_n = dt*theta / m['dy']**2
+    # NOTE: dt is halved due to ADI spanning two half steps of length dt / 2
+    bx_c = curv*(1 - theta)*dt / (4*m['dx'])
+    bx_n = curv*theta*dt / (4*m['dx'])
+    bxx_c = dt*(1 - theta) / (2*m['dx']**2)
+    bxx_n = dt*theta / (2*m['dx']**2)
+    byy_c = dt*(1 - theta) / (2*m['dy']**2)
+    byy_n = dt*theta / (2*m['dy']**2)
 
     u0 = mesh['u_prev']
-    u_mid = np.zeros_like(u0, float)
+    u_mid = copy(u0)
 
     # row slices (across x)
     for j in m['j']:
@@ -291,27 +292,28 @@ def update_temp(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
             te = m['edge_states'][reg['line_e']]['type']
             vs = m['edge_states'][reg['line_s']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
             ve = m['edge_states'][reg['line_e']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
+  
+            coeffs = np.zeros((4, e + 1 - s), float)
+            coeffs[0, 1:-1] = (-bxx_n + bx_n / m['x'][s+1:e])*alpha[s:e-1, j]
+            coeffs[0, -1] = 0.0 if te == 'direct' else -1.0
 
-            a = np.r_[0.0, (-bxx_n + bx_n / m['x'][s+1:e])*alpha[s:e-1, j], 0.0 if\
-                        te== 'direct' else -1.0]
+            coeffs[1, 0] = 1.0 if ts == 'direct' else -1.0
+            coeffs[1, 1:-1] = 1 + 2*bxx_n*alpha[s+1:e,j]
+            coeffs[1, -1] = 1.0
 
-            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*bxx_n*alpha[s+1:e,j], 1.0]
+            coeffs[2, 0] = 0.0 if ts == 'direct' else 1.0
+            coeffs[2, 1:-1] = -(bxx_n + bx_n / m['x'][s+1:e])*alpha[s+2:e+1,j]
 
-            c = np.r_[0.0 if ts == 'direct' else 1.0, -(bxx_n +\
-                        bx_n / m['x'][s+1:e])*alpha[s+2:e+1,j], 0.0]
+            coeffs[3, 0] = vs*(1.0 if ts == 'direct' else m['dx'])
+            coeffs[3, 1:-1] = byy_c*alpha[s+1:e,j-1]*u0[s+1:e,j-1] +\
+                              (1 - 2*byy_c*alpha[s+1:e,j])*u0[s+1:e,j] +\
+                              byy_c*alpha[s+1:e,j+1]*u0[s+1:e,j+1]
+            coeffs[3, -1] = ve*(1.0 if te == 'direct' else m['dx'])
 
-            d = np.r_[vs*(1 if ts == 'direct' else m['dx']),\
-
-                        byy_c*alpha[s+1:e,j-1]*u0[s+1:e,j-1] +\
-                        (1 - 2*byy_c*alpha[s+1:e,j])*u0[s+1:e,j] +\
-                        byy_c*alpha[s+1:e,j+1]*u0[s+1:e,j+1],\
-
-                        ve*(1 if te == 'direct' else m['dx'])]
-
-            u_mid[s:e+1,j] = tdma(a, b, c, d)
+            u_mid[s:e+1,j] = tdma(coeffs[0,:], coeffs[1,:], coeffs[2,:], coeffs[3,:])
 
     # column slices (across y)
-    u_out = u_mid
+    u_out = u0
     for i in m['i']:
         for reg in m['regions_y'][i]:
 
@@ -332,21 +334,25 @@ def update_temp(*, mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
             vs = m['edge_states'][reg['line_s']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
             ve = m['edge_states'][reg['line_e']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
 
-            a = np.r_[0.0, -byy_n*alpha[i, s:e-1], 0.0 if te == 'direct' else -1.0]
+            coeffs = np.zeros((4, e + 1 - s), float)
 
-            b = np.r_[1.0 if ts == 'direct' else -1.0, 1 + 2*byy_n*alpha[i,s+1:e], 1.0]
+            coeffs[0, 1:-1] = -byy_n*alpha[i, s:e-1]
+            coeffs[0, -1] = 0.0 if te == 'direct' else -1.0
 
-            c = np.r_[0.0 if ts == 'direct' else 1.0, -byy_n*alpha[i,s+2:e+1], 0.0]
+            coeffs[1, 0] = 1.0 if ts == 'direct' else -1.0
+            coeffs[1, 1:-1] = 1 + 2*byy_n*alpha[i,s+1:e]
+            coeffs[1, -1] = 1.0
 
-            d = np.r_[vs*(1 if ts == 'direct' else m['dy']),\
+            coeffs[2, 0] = 0.0 if ts == 'direct' else 1.0
+            coeffs[2, 1:-1] = -byy_n*alpha[i,s+2:e+1]
 
-                (bxx_c + bx_c / m['x'][i])*alpha[i+1,s+1:e]*u_mid[i+1,s+1:e] +\
-                (1 - 2*bxx_c*alpha[i,s+1:e])*u_mid[i,s+1:e] +\
-                (bxx_c - bx_c / m['x'][i])*alpha[i-1,s+1:e]*u_mid[i-1,s+1:e],
+            coeffs[3, 0] = vs*(1 if ts == 'direct' else m['dy'])
+            coeffs[3, 1:-1] = (bxx_c + bx_c / m['x'][i])*alpha[i+1,s+1:e]*u_mid[i+1,s+1:e] +\
+                              (1 - 2*bxx_c*alpha[i,s+1:e])*u_mid[i,s+1:e] +\
+                              (bxx_c - bx_c / m['x'][i])*alpha[i-1,s+1:e]*u_mid[i-1,s+1:e]
+            coeffs[3, -1] = ve*(1 if te == 'direct' else m['dy'])
 
-                ve*(1 if te == 'direct' else m['dy'])]
-
-            u_out[i,s:e+1] = tdma(a, b, c, d)
+            u_out[i,s:e+1] = tdma(coeffs[0,:], coeffs[1,:], coeffs[2,:], coeffs[3,:])
 
     return u_out
 
@@ -442,7 +448,7 @@ def link_to_mesh(cfg:dict, edge:dict, bc:dict) -> dict:
 
         s_edge, e_edge = edge['indices'][:2]
         lc = cfg['lumped_capacitors'][split_link[1]]
-        link_obj = deepcopy(lc['edges'][int(split_link[2])]) | {'type':'lc_edge'}
+        link_obj = copy(lc['edges'][int(split_link[2])]) | {'type':'lc_edge'}
         link_obj.update({'u':lc['u_prev'] + np.zeros((e_edge - s_edge + 1), float)})
 
         if mode == 'radiation':

@@ -54,7 +54,9 @@ def run_simulation(config:str):
     meshes = {}
     if cfg.get('meshes') is not None:
         for key, mesh in cfg['meshes'].items():
-            meshes.update({key:create_mesh(mesh, cfg['force_finer'], materials[mesh['material']])})
+            meshes.update({key:create_mesh(mesh,
+                                           cfg['force_finer'],
+                                           materials[mesh['material']])})
         config.update({'meshes':meshes})
 
     lumped_capacitors = {}
