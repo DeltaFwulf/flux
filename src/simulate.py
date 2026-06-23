@@ -78,7 +78,7 @@ def run_simulation(config:str):
     t_now = t[-1]
 
     while t_now < runtime['tf']:
-        dt = min(runtime['dt_max'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
+        dt = 2*min(runtime['dt_max'], min(runtime['max_courant']*min(m['dx'], m['dy'])**2\
                  / np.max(m['k'] / (m['rho']*m['cp'])) for m in meshes.values()))
 
         t_now += dt
