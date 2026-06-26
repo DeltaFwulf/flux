@@ -1,8 +1,8 @@
 # Simulate a solid cylinder with dirichlet boundary condition at outer face
 
 
-tf: 60000.0
-dt_storage: 600.0
+tf: 3000.0
+dt_storage: 30.0
 dt_max: 20.0
 theta: 0.5
 max_courant: 0.5
