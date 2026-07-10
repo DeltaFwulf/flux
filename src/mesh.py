@@ -3,6 +3,7 @@
 from copy import copy
 from math import copysign, pi
 import numpy as np
+import numba
 
 from .util import calc_bc_relations, get_decimal_resolution, calc_face_perimeter, material_properties
 from .heat_transfer import conduction, convection, radiation
@@ -312,6 +313,7 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
 
             u_mid[s:e+1,j] = tdma(coeffs[0,:], coeffs[1,:], coeffs[2,:], coeffs[3,:])
 
+
     # column slices (across y)
     u_out = u0
     for i in m['i']:
@@ -358,14 +360,15 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
 
 
 
-def tdma(a, b, c, d) -> np.ndarray:
-    """Solves for x given a tridiagonal matrix, following Thomas' Algorithm."""
+@numba.jit
+def tdma(a:np.ndarray, b:np.ndarray, c:np.ndarray, d:np.ndarray) -> np.ndarray:
+    """Solves a tridiagonal matrix using Thomas' algorithm."""
 
     # NOTE: yes, I am aware of scipy.sparse.linalg.spsolve; it was slower for this
     #       implementation :)
 
-    p = copy(d)
-    q = copy(d)
+    p = np.zeros((d.size), float)
+    q = np.zeros((d.size), float)
 
     p[0] = -c[0] / b[0]
     q[0] = d[0] / b[0]
