@@ -1,0 +1,66 @@
+# Hotshoe approximation for hand sealer design.
+
+tf: 30.0
+dt_storage: 1.0
+dt_max: 1.0
+theta: 0.5
+max_courant: 0.5
+force_finer: True
+
+meshes:
+
+  hotshoe:
+    label: 'hotshoe'
+    colour: 'grey'
+    dx: 0.01
+    dy: 0.01
+    u0: 448.0
+    material: 'aluminium'
+    curvature: 0
+    depth: 0.025
+
+    lines:
+    - [[0.0, 0.0], [0.09, 0.0]]
+    - [[0.09, 0.0], [0.09, 0.004]]
+    - [[0.09, 0.004], [0.075, 0.004]]
+    - [[0.075, 0.004], [0.075, 0.018]]
+    - [[0.075, 0.018], [0.09, 0.018]]
+    - [[0.09, 0.018], [0.09, 0.02]]
+    - [[0.09, 0.02], [0.04, 0.02]]
+    - [[0.04, 0.02], [0.04, 0.03]]
+    - [[0.04, 0.03], [0.09, 0.03]]
+    - [[0.09, 0.03], [0.09, 0.04]]
+    - [[0.09, 0.04], [0.0, 0.04]]
+    - [[0.0, 0.04], [0.0, 0.018]]
+    - [[0.0, 0.018], [0.015, 0.018]]
+    - [[0.015, 0.018], [0.015, 0.004]]
+    - [[0.015, 0.004], [0.0, 0.004]]
+    - [[0.0, 0.004], [0.0, 0.0]]
+
+    boundary_conditions:
+    - {edge: 0, mode: 'neumann', value: 0.0}
+    - {edge: 1, mode: 'convection', link: 'ambient_air'}
+    - {edge: 2, mode: 'convection', link: 'ambient_air'}
+    - {edge: 3, mode: 'convection', link: 'ambient_air'}
+    - {edge: 4, mode: 'convection', link: 'ambient_air'} 
+    - {edge: 5, mode: 'convection', link: 'ambient_air'}
+    - {edge: 6, mode: 'dirichlet', value: 448.0}
+    - {edge: 7, mode: 'dirichlet', value: 448.0}
+    - {edge: 8, mode: 'dirichlet', value: 448.0}
+    - {edge: 9, mode: 'convection', link: 'ambient_air'}
+    - {edge: 10, mode: 'convection', link: 'ambient_air'}
+    - {edge: 11, mode: 'convection', link: 'ambient_air'}
+    - {edge: 12, mode: 'convection', link: 'ambient_air'}
+    - {edge: 13, mode: 'convection', link: 'ambient_air'}
+    - {edge: 14, mode: 'convection', link: 'ambient_air'}
+    - {edge: 15, mode: 'convection', link: 'ambient_air'}
+
+
+environment:
+
+  ambient_air:
+    name: 'Air'
+    temperature: 288.0
+    pressure: 101325.0
+    phase: 'gas'
+    velocity: 0.0

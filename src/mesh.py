@@ -57,6 +57,53 @@ def create_mesh(mesh_def:dict, force_finer:bool, material:dict):
     return m
 
 
+def create_mesh_serialised(mesh_def:dict, force_finer:bool, material:dict) -> dict:
+    """Creates a serialised mesh, for use with numba-optimised update routines."""
+
+    m = mesh_def
+
+    x_min = min(pt[0] for line in m['lines'] for pt in line)
+    y_min = min(pt[1] for line in m['lines'] for pt in line)
+
+    m = m | grid_resolution(m['lines'], m['dx'], m['dy'], force_finer, min_elements=4)
+
+    m.update({'i':np.arange(0, max((p[0] - x_min) / m['dx'] for l in m['lines'] for p in l) + 1, dtype=int)})
+    m.update({'j':np.arange(0, max((p[1] - y_min) / m['dy'] for l in m['lines'] for p in l) + 1, dtype=int)})
+
+    x_res = max(get_decimal_resolution(n) for n in (m['dx'], x_min))
+    y_res = max(get_decimal_resolution(n) for n in (m['dy'], y_min))
+    m.update({'x':np.round(x_min + m['dx']*m['i'], x_res)})
+    m.update({'y':np.round(y_min + m['dy']*m['j'], y_res)})
+    m.update({'regions_x':[slice_regions('x', m['x'], y, m['lines']) for y in m['y']]})
+    m.update({'regions_y':[slice_regions('y', m['y'], x, m['lines']) for x in m['x']]})
+
+    # Sort regions into serialised and sorted dicts of arrays:
+    
+
+    find_edges(m)
+    m.update({'edge_bcs':calc_bc_relations(m['edges'], m['boundary_conditions'])})
+
+    m.update({'u':np.zeros((m['i'].size, m['j'].size, 1), float) + mesh_def['u0']})
+    m.update({'u_latest':m['u'][:, :, -1]})
+    m.update({'u_prev':m['u'][:, :, -1]})
+    m.update({'edge_powers':[np.zeros(1, float) for e in range(len(m['edges']))]})
+    m.update({'edge_powers_latest':[np.zeros(1, float) for e in range(len(m['edges']))]})
+
+    props = material_properties(m['u_prev'], material)
+    m.update({'k':props['k'],
+              'cp':props['cp'],
+              'rho':props['rho'],
+              'emissivity':props['emissivity']})
+
+    vol = volume(m['regions_x'], m['x'], m['dy'], m['curvature'], m.get('depth'))
+    m.update({'mass':m['rho']*vol})
+    m.update({'enthalpy':np.sum(m['mass']*m['cp']*m['u_prev'])})
+
+    m.pop('u0')
+
+    return m
+
+
 
 def slice_regions(direction:str, xp:np.ndarray, xn:float, lines:list) -> list[dict]:
     """Calculates regions within a mesh slice.
@@ -222,6 +269,8 @@ def grid_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True, min
     calculated resolution is halved until it is <= original resolution.
     """
 
+    # TODO: update docstring
+
     pow_x = max(get_decimal_resolution(pt[0]) for line in lines for pt in line)
     pow_y = max(get_decimal_resolution(pt[1]) for line in lines for pt in line)
 
@@ -231,9 +280,7 @@ def grid_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True, min
     min_width_x = np.min(np.abs(np.diff(x)))
     min_width_y = np.min(np.abs(np.diff(y)))
 
-    if abs(x[-1] - x[0]) / dx0 == round(abs(x[-1] - x[0]) / dx0):
-        dx = dx0
-    elif x.size == 2:
+    if x.size == 2:
         dx = x[1] - x[0]
     else:
         dx = float(np.gcd.reduce(((x[1:] - x[0])*10**pow_x).astype(int))) / 10**pow_x
@@ -241,9 +288,8 @@ def grid_resolution(lines:list, dx0:float, dy0:float, force_finer:bool=True, min
     while dx > dx0 and force_finer or min_width_x / dx < min_elements:
         dx /= 2
 
-    if abs(y[-1] - y[0]) / dy0 == round(abs(y[-1] - y[0]) / dy0):
-        dy = dy0
-    elif y.size == 2:
+
+    if y.size == 2:
         dy = y[1] - y[0]
     else:
         dy = float(np.gcd.reduce(((y[1:] - y[0])*10**pow_y).astype(int))) / 10**pow_y
@@ -262,19 +308,19 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
     alpha = m['k'] / (m['rho']*m['cp'])
 
     # NOTE: dt is halved due to ADI spanning two half steps of length dt / 2
-    bx_c = curv*(1 - theta)*dt / (4*m['dx'])
-    bx_n = curv*theta*dt / (4*m['dx'])
+    bx_c = dt*curv*(1 - theta) / (4*m['dx'])
+    bx_n = dt*curv*theta / (4*m['dx'])
     bxx_c = dt*(1 - theta) / (2*m['dx']**2)
     bxx_n = dt*theta / (2*m['dx']**2)
     byy_c = dt*(1 - theta) / (2*m['dy']**2)
     byy_n = dt*theta / (2*m['dy']**2)
 
-    u0 = mesh['u_prev']
+    u0 = m['u_prev']
     u_mid = copy(u0)
 
     # row slices (across x)
     for j in m['j']:
-        for reg in mesh['regions_x'][j]:
+        for reg in m['regions_x'][j]:
 
             s, e = reg['bounds']
 
@@ -292,8 +338,8 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
             ts = m['edge_states'][reg['line_s']]['type']
             te = m['edge_states'][reg['line_e']]['type']
             vs = m['edge_states'][reg['line_s']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
-            ve = m['edge_states'][reg['line_e']]['values'][j - m['edges'][reg['line_s']]['indices'][0]]
-  
+            ve = m['edge_states'][reg['line_e']]['values'][j - m['edges'][reg['line_e']]['indices'][0]]
+
             coeffs = np.zeros((4, e + 1 - s), float)
             coeffs[0, 1:-1] = (-bxx_n + bx_n / m['x'][s+1:e])*alpha[s:e-1, j]
             coeffs[0, -1] = 0.0 if te == 'direct' else -1.0
@@ -312,7 +358,6 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
             coeffs[3, -1] = ve*(1.0 if te == 'direct' else m['dx'])
 
             u_mid[s:e+1,j] = tdma(coeffs[0,:], coeffs[1,:], coeffs[2,:], coeffs[3,:])
-
 
     # column slices (across y)
     u_out = u0
@@ -334,7 +379,7 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
             ts = m['edge_states'][reg['line_s']]['type']
             te = m['edge_states'][reg['line_e']]['type']
             vs = m['edge_states'][reg['line_s']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
-            ve = m['edge_states'][reg['line_e']]['values'][i - m['edges'][reg['line_s']]['indices'][0]]
+            ve = m['edge_states'][reg['line_e']]['values'][i - m['edges'][reg['line_e']]['indices'][0]]
 
             coeffs = np.zeros((4, e + 1 - s), float)
 
@@ -360,7 +405,7 @@ def update_temp(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
 
 
 
-@numba.jit
+@numba.jit(nopython=True)
 def tdma(a:np.ndarray, b:np.ndarray, c:np.ndarray, d:np.ndarray) -> np.ndarray:
     """Solves a tridiagonal matrix using Thomas' algorithm."""
 
@@ -383,6 +428,182 @@ def tdma(a:np.ndarray, b:np.ndarray, c:np.ndarray, d:np.ndarray) -> np.ndarray:
         d[i] = p[i]*d[i + 1] + q[i]
 
     return d
+
+
+
+def update_temp_opt(mesh:dict, dt:float, curv:int, theta:float) -> np.ndarray:
+    """Updates mesh temperature using an ADI scheme."""
+
+    m = mesh
+    alpha = m['k'] / (m['rho']*m['cp'])
+
+    # NOTE: dt is halved due to ADI spanning two half steps of length dt / 2
+    bx_c = dt*curv*(1 - theta) / (4*m['dx'])
+    bx_n = dt*curv*theta / (4*m['dx'])
+    bxx_c = dt*(1 - theta) / (2*m['dx']**2)
+    bxx_n = dt*theta / (2*m['dx']**2)
+    byy_c = dt*(1 - theta) / (2*m['dy']**2)
+    byy_n = dt*theta / (2*m['dy']**2)
+
+    u_in = mesh['u_prev']
+    u_mid = copy(u_in)
+
+    # TODO: update row edges
+
+    # FIXME: provide vectorised edge states
+    solve_int_rows(bounds=m['row_ints']['bounds'],
+                   betas=np.array([bx_n, bxx_n, byy_c], float),
+                   dx=m['dx'],
+                   alpha=alpha,
+                   x=m['x'],
+                   u0=u_mid,
+                   types=m['row_ints']['types'],
+                   vals=m['row_ints']['vals'])
+
+    u_out = u_in
+
+    # TODO: update col edges
+
+    # FIXME: provide vectorised edge states
+    solve_int_cols(bounds=m['col_ints']['bounds'],
+                   betas=np.array([bx_c, bxx_c, byy_n], float),
+                   dy=m['dy'],
+                   alpha=alpha,
+                   x=m['x'],
+                   u0=u_out,
+                   types=m['col_ints']['types'],
+                   vals=m['col_ints']['vals'])
+
+    return u_out
+
+
+
+@numba.jit(nopython=True)
+def solve_int_rows(*, bounds:np.ndarray, betas:np.ndarray, dx:float, alpha:np.ndarray, x:np.ndarray, u0:np.ndarray, types:np.ndarray, vals:np.ndarray) -> np.ndarray:
+    """Calculates TDMA coefficients for horizontal mesh slices.
+    
+    Inputs:
+    - bounds: a 2D array of ints. Each row contains (s, e, j) | (start, end, normal) coordinates
+    - betas: a 1D array containing: (bx_n, bxx_n, byy_c)
+    - dx: mesh x resolution
+    - alpha: mesh diffusivity array, 2D, float
+    - x: mesh x coordinates, 1D array of float
+    - u0: mesh initial temperature, 2D, float
+    - types: 2D array of bools indicating boundary condition type (direct=True), (ts, te)
+    - vals: 2D array of floats, each row containing (vs, ve)
+
+    Ouput:
+    - 2D array of float, the new mesh temperature array
+    """
+
+    bx_n, bxx_n, byy_c = betas
+    u_out = np.zeros((np.shape(u0)), float)
+
+    for r in range(np.shape(bounds)[0]):
+        s, e, j = bounds[r,:]
+
+        # Build TDMA coefficients
+        k = np.zeros((4, e - s + 1), float)
+        k[0, 1:-1] = (-bxx_n + bx_n / x[s+1:e])*alpha[s:e-1, j]
+        k[0, -1] = 0.0 if types[r,1] else -1.0
+
+        k[1, 0] = 1.0 if types[r,0] else -1.0
+        k[1, 1:-1] = 1 + 2*bxx_n*alpha[s+1:e,j]
+        k[1, -1] = 1.0
+
+        k[2, 0] = 0.0 if types[r,0] else 1.0
+        k[2, 1:-1] = -(bxx_n + bx_n / x[s+1:e])*alpha[s+2:e+1,j]
+
+        k[3, 0] = vals[r,0]*(1.0 if types[r,0] else dx)
+        k[3, 1:-1] = byy_c*alpha[s+1:e,j-1]*u0[s+1:e,j-1] +\
+                            (1 - 2*byy_c*alpha[s+1:e,j])*u0[s+1:e,j] +\
+                            byy_c*alpha[s+1:e,j+1]*u0[s+1:e,j+1]
+        k[3, -1] = vals[r,1]*(1.0 if types[r,1] else dx)
+
+        # solve new temperature via TDMA
+        p = np.zeros((e - s + 1), float)
+        q = np.zeros((e - s + 1), float)
+
+        p[0] = -k[2, 0] / k[1, 0]
+        q[0] = k[3, 0] / k[1, 0]
+
+        for n in range(1, e - s + 1):
+            dn = k[1, n] + k[0, n]*p[n - 1]
+            p[n] = - k[2, n] / dn
+            q[n] = (k[3, n] - k[0, n]*q[n - 1]) / dn
+
+        k[3, -1] = q[-1]
+        for n in range(e - s - 1, -1, -1):
+            k[3, n] = p[n]*k[3, n + 1] + q[n]
+
+        u_out[s:e+1, j] = k[3,:]
+
+    return u_out
+
+
+
+@numba.jit(nopython=True)
+def solve_int_cols(*, bounds:np.ndarray, betas:np.ndarray, dy:float, alpha:np.ndarray, x:np.ndarray, u0:np.ndarray, types:np.ndarray, vals:np.ndarray) -> np.ndarray:
+    """Calculates TDMA coefficients for horizontal mesh slices.
+    
+    Inputs:
+    - bounds: a 2D array of ints. Each row contains (s, e, j), the row start, end, and normal grid coordinates
+    - betas: a 1D array containing: (bx_n, bxx_n, byy_c)
+    - dx: mesh x resolution
+    - alpha: mesh diffusivity array, 2D, float
+    - x: mesh x coordinates, 1D array of float
+    - u0: mesh initial temperature, 2D, float
+    - types: 2D array of bools indicating boundary condition type (True for direct, False for neumann), (ts, te)
+    - vals: 2D array of floats, each row containing (vs, ve)
+
+    Ouput:
+    - 2D array of float, the new mesh temperature array
+    """
+
+    bx_c, bxx_c, byy_n = betas
+    u_out = np.zeros(np.shape(u0), float)
+
+    for r in range(np.shape(bounds)[0]):
+        s, e, i = bounds[r, :]
+
+        # build TDMA coefficients
+        k = np.zeros((4, e - s + 1), float)
+
+        k[0, 1:-1] = -byy_n*alpha[i, s:e-1]
+        k[0, -1] = 0.0 if types[r,1] else -1.0
+
+        k[1, 0] = 0.0 if types[r,0] else 1.0
+        k[1, 1:-1] = 1 + 2*byy_n*alpha[i, s+1:e]
+        k[1, -1] = 1.0
+
+        k[2, 0] = 0.0 if types[r,0] else 1.0
+        k[2, 1:-1] = -byy_n*alpha[i,s+2:e+1]
+
+        k[3, 0] = vals[r,0]*(1 if types[r,0] else dy)
+        k[3, 1:-1] = (bxx_c + bx_c / x[i])*alpha[i+1,s+1:e]*u0[i+1,s+1:e] +\
+                          (1 - 2*bxx_c*alpha[i,s+1:e])*u0[i,s+1:e] +\
+                          (bxx_c - bx_c / x[i])*alpha[i-1,s+1:e]*u0[i-1,s+1:e]
+        k[3, -1] = vals[r,1]*(1 if types[r,1] else dy)
+
+        # solve new temperature via TDMA
+        p = np.zeros((e - s + 1), float)
+        q = np.zeros((e - s + 1), float)
+
+        p[0] = -k[2, 0] / k[1, 0]
+        q[0] = k[3, 0] / k[1, 0]
+
+        for n in range(1, e - s + 1):
+            dn = k[1, n] + k[0, n]*p[n - 1]
+            p[n] = -k[2, n] / dn
+            q[n] = (k[3, n] - k[0, n]*q[n - 1]) / dn
+
+        k[3, -1] = q[-1]
+        for n in range(e - s - 1, -1, -1):
+            k[3, n] = p[n]*k[3, n+1] + q[n]
+
+        u_out[i, s:e+1] = k[3,:]
+
+    return u_out
 
 
 
@@ -544,40 +765,6 @@ def calc_edge_states(cfg:dict) -> None:
 
 
 
-def edge_area(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0.0) -> np.ndarray:
-    """Calculates the surface area of mesh edge face elements."""
-
-    s, e = bounds[:2]
-    p = np.linspace(min(s, e), max(s, e), round(abs(s - e) / h + 1))
-
-    # planar
-    if curvature == 0:
-        areas = h*depth*np.r_[0.5, np.ones((p.size - 2), float), 0.5]
-
-    # curved, horizontal
-    elif normal[0] == 0:
-        if s < 0:
-            raise ValueError
-
-        areas = pi*np.ones_like(p)
-        half_out = p + 0.5*h
-
-        areas[0] *= half_out[0]**2 - p[0]**2
-        areas[-1] *= p[-1]**2 - half_out[-2]**2
-        areas[1:-1] *= np.abs(half_out[1:-1]**2 - half_out[:-2]**2)
-
-    # curved, vertical
-    else:
-        if bounds[2] < 0:
-            raise ValueError
-
-        areas = 2*pi*bounds[2]*h*np.r_[0.5, np.ones(p.size - 2, float), 0.5]
-
-    # ensure element areas for elements in ascending order
-    return areas if e > s else np.flip(areas)
-
-
-
 def edge_gradient(u:np.ndarray, edge:dict) -> np.ndarray:
     """Calculates a 2nd order approximation to temperature gradient.
     
@@ -612,6 +799,40 @@ def edge_power(u:np.ndarray, k:np.ndarray, edge:dict, curvature:int) -> float:
     fluxes = edge_gradient(u, edge)*(k[s:e+1, n+d] if edge['normal'][0] == 0 else k[n+d, s:e+1])
 
     return -d*np.sum(fluxes*areas)
+
+
+
+def edge_area(bounds:tuple, h:float, normal:tuple, curvature:int, depth:float=0.0) -> np.ndarray:
+    """Calculates the surface area of mesh edge face elements."""
+
+    s, e = bounds[:2]
+    p = np.linspace(min(s, e), max(s, e), round(abs(s - e) / h + 1))
+
+    # planar
+    if curvature == 0:
+        areas = h*depth*np.r_[0.5, np.ones((p.size - 2), float), 0.5]
+
+    # curved, horizontal
+    elif normal[0] == 0:
+        if s < 0:
+            raise ValueError
+
+        areas = pi*np.ones_like(p)
+        half_out = p + 0.5*h
+
+        areas[0] *= half_out[0]**2 - p[0]**2
+        areas[-1] *= p[-1]**2 - half_out[-2]**2
+        areas[1:-1] *= np.abs(half_out[1:-1]**2 - half_out[:-2]**2)
+
+    # curved, vertical
+    else:
+        if bounds[2] < 0:
+            raise ValueError
+
+        areas = 2*pi*bounds[2]*h*np.r_[0.5, np.ones(p.size - 2, float), 0.5]
+
+    # ensure element areas for elements in ascending order
+    return areas if e > s else np.flip(areas)
 
 
 

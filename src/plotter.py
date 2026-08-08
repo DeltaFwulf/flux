@@ -193,8 +193,12 @@ def plot_total_powers(results:dict):
     for mesh in results['meshes'].values():
 
         total_power = 0.0
-        for p in mesh['edge_powers']:
-            total_power += p
+        # for p in mesh['edge_powers']:
+        #     total_power += p
+
+        for ind, p in enumerate(mesh['edge_powers']):
+            if ind not in (6, 7, 8):
+                total_power += p
 
         ax_pwr.plot(results['t'],
                     total_power,

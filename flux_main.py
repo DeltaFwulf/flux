@@ -5,6 +5,6 @@ from src.plotter import animate_temp_2d, plot_total_powers
 
 
 
-results = run_simulation("octoforge.yaml")
-animate_temp_2d(results, save=True)
+results = run_simulation("hotshoe.yaml")
+animate_temp_2d(results, save=False)
 plot_total_powers(results)
